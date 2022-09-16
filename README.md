@@ -1,6 +1,10 @@
 # Projeto Embarcados
 
-Desenvolvendo um controle remoto.
+Desenvolvendo um controle remoto wii para jogo Mario Kart!
+
+<div align="center">
+<img alt="jogo mario" src = "img_README/BelovedSeriousKouprey-size_restricted.gif" width="500"></img>
+</div>
 
 ## Entrega 1
 
@@ -42,6 +46,10 @@ Desenvolvendo um controle remoto.
 
 <div align ="center">
 <h4>  Mario Kart para Wii emulado no PC. </h4>
+</div>
+
+<div align="center">
+<img alt="jogo mario" src = "img_README/mario-kart.gif" width="300"></img>
 </div>
 
 <br></br>
@@ -151,3 +159,8 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 <!--
 Faca um esboco de como seria esse controle (vai ter uma etapa que terão que detalhar melhor isso).
 -->
+
+<div align="center">
+<img alt="controle_esboço" src = "img_README/Screenshot 2022-09-16 at 19-15-51 22b-emb-proj.png" width="300"></img>
+</div>
+
