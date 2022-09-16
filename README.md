@@ -75,9 +75,9 @@ Pensando em melhorar experiência de usuários que desejam ter uma experiência 
 
 Uma criança pediu para o papai Noel seu tao sonhado jogo do Mario Kart, o qual o mesmo era muito fã. Seu pai, ao ler a carta (obs: O papai Noel não existe) ficou um pouco preocupado em como conseguiria comprar o jogo e também os acessórios que permitem que o jogo tenha a sua experiencia única, como o controle de movimento em forma de direção do Wii. Chegando próximo ao Natal o pai percebe que conseguiu juntar dinheiro suficiente para comprar o jogo, mas não o controle, então ele teve uma ideia ! Lembrou de uma aula de Sistemas Embarcados durante sua faculdade e resolveu colocar seus conhecimentos em prática construindo seu próprio controle de movimento baseado no controle wii de Mario Kart.
 
-Seu contorle possibilitaria que o carro se move-se com "giro" da direção do controle, acelerar e dar rê com uma "alavanca", aperta funcionalidades com botões e andar pelas configurações do jogo com um joypad no controle!
+Seu controle possibilitaria que o carro se movesse com "giro" da direção do controle, acelerar e dar rê com uma "alavanca", apertar funcionalidades com botões e andar pelas configurações do jogo com um joypad no controle!
 
-No dia do Natal a criança ficou muito feliz ao receber seu jogo favorito e ainda mais feliz pelo esforço do seu pai em construir do zero um controle para ele. A experiencia ao jogar o jogo foi praticamente igual ao do cotrole original, dando uma imersão ao joguinho de carro, e a noite de Natal terminou feliz com pai vs filho jogando no controle o famoso jogo do Mario.  
+No dia do Natal a criança ficou muito feliz ao receber seu jogo favorito e ainda mais feliz pelo esforço do seu pai em construir do zero um controle para ele. A experiencia ao jogar o jogo foi praticamente igual ao do cotrole original, dando uma imersão ao joguinho de carro, e a noite de Natal terminou feliz com pai e  filho jogando no controle o famoso jogo do Mario.  
 
 
 <br></br>
