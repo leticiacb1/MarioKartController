@@ -4,35 +4,51 @@ Desenvolvendo um controle remoto.
 
 ## Entrega 1
 
-### Integrantes
+`INTEGRANTES`
 
 - Letícia Coêlho Barbosa
 - Lorran Caetano Machado Lopes
 
-### Ideia
+`IDEIA`
 
 <!--  Descreva aqui em poucas palavras qual a ideia do seu controle. Se ele vai ser de jogo ou de aplicação -->
-Controle de jogo para Mario Kart Wii
 
-### Nome
+<div align ="center">
+<h4>  Controle de jogo para Mario Kart Wii </h4>
+</div>
+<br></br>
+
+`NOME`
 
 <!-- De um nome ao seu controle! -->
-Controle Ultra Blaster Marcio Kart
 
-### Usuários 
+<div align ="center">
+<h4>  Controle Ultra Blaster Marcio Kart </h4>
+</div>
+<br></br>
+
+`USUÁRIOS`
 
 <!-- Descreva aqui quem seriam os possíveis usuários deste controle. -->
-Nerds e crianças
 
+<div align ="center">
+<h4>  Nerds e crianças </h4>
+</div>
+<br></br>
 
-### Software/Jogo 
+`SOFTWARE/JOG0 `
 
 <!-- Qual software que seu controle vai controlar? -->
-Mario Kart para Wii emulado no PC.
 
+<div align ="center">
+<h4>  Mario Kart para Wii emulado no PC. </h4>
+</div>
+
+<br></br>
 ### Jornada do usuários (3 pts)
 
 <!-- Descreva ao menos duas jornadas de usuários distintos, é para caprichar! -->
+<br></br>
 
 <div align ="center">
 <h4> Jornada 1 </h4>
@@ -43,13 +59,14 @@ Buscando em sites de jogos de sua infância o usuário encontra a possibilidade 
 Ele então baixa de um site duvidoso o tão saudoso jogo que queria. Infelizmente, apesar de conseguir interagir com o jogo a experiência não foi como ele esperava, ele nao se sentia imersivo no jogo, no lugar do tão famoso "controle espacial" de direção ele tem apenas teclas comuns e seu mouse.
 
 Pensando em melhorar experiência de usuários que desejam ter uma experiência mais imersiva no jogo Mario Kart , adquirido em sites duvidosos, o controle Ultra Blaster Marcio Kart surgiu. Com ele o usuário tera a experiencia de movimentação e imersão promovida pelo jogo.
+<br></br>
 
 <div align ="center">
 <h4> Jornada 2 </h4>
 </div>
 
 
-
+<br></br>
 ### Comandos/ Feedbacks (2 pts)
 
 <!-- 
@@ -58,9 +75,11 @@ Quais são os comandos/ operacões possíveis do seu controle?
 Quais os feedbacks que seu controle vai fornecer ao usuário?
 -->
 
+<br></br>
 <div align ="center">
 <h4> Comandos </h4>
 </div>
+<br></br>
 
 - Acelearar para frente
 
@@ -76,13 +95,16 @@ Quais os feedbacks que seu controle vai fornecer ao usuário?
 
 - Botao liga/desliga.
 
+<br></br>
 <div align ="center">
 <h4> Feedback </h4>
 </div>
+<br></br>
 
 - Leds para indicação de botoes pressionados
 
 - Vibração em caso de dano 
+<br></br>
 
 ## In/OUT (3 pts)
 
@@ -92,11 +114,12 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 - Avanca música: Push button amarelo
 - Volume da música: Fita de LED indicando potência do som
 -->
-
+<br></br>
 
 <div align ="center">
 <h4> Comandos </h4>
 </div>
+<br></br>
 
 - Acelearar para frente ou para trás: <b>Potenciômetro</b> 
 
@@ -109,17 +132,19 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 - Selecionar e percorrer menus e configuracoes do jogo : <b>Joypad</b>
 
 - Botao liga/desliga : <b>Mini illuminated pushbutton</b>
-
+<br></br>
 
 <div align ="center">
 <h4> Feedback </h4>
 </div>
+<br></br>
 
-- Botao vermelho pressionado : LED vermelho
+- Botao vermelho pressionado : <b>LED vermelho</b>
 
-- Botao azul pressionado : LED azul
+- Botao azul pressionado : <b>LED azul</b>
 
-- Vibração em caso de dano : Vibracall
+- Vibração em caso de dano : <b>Vibracall</b>
+<br></br>
 
 ### Design (2 pts)
 
