@@ -27,18 +27,27 @@ Nerds e crianças
 
 ### Software/Jogo 
 
-<!-- Qual software que seu controle vai controlar? 
+<!-- Qual software que seu controle vai controlar? -->
 Mario Kart para Wii emulado no PC.
 
 ### Jornada do usuários (3 pts)
 
 <!-- Descreva ao menos duas jornadas de usuários distintos, é para caprichar! -->
-## Jornada 1:
+
+<div align ="center">
+<h4> Jornada 1 </h4>
+</div>
+
 Buscando em sites de jogos de sua infância o usuário encontra a possibilidade de jogar um jogo que ele adorava quando era criança, Mario Kart.
 
 Ele então baixa de um site duvidoso o tão saudoso jogo que queria. Infelizmente, apesar de conseguir interagir com o jogo a experiência não foi como ele esperava, ele nao se sentia imersivo no jogo, no lugar do tão famoso "controle espacial" de direção ele tem apenas teclas comuns e seu mouse.
 
 Pensando em melhorar experiência de usuários que desejam ter uma experiência mais imersiva no jogo Mario Kart , adquirido em sites duvidosos, o controle Ultra Blaster Marcio Kart surgiu. Com ele o usuário tera a experiencia de movimentação e imersão promovida pelo jogo.
+
+<div align ="center">
+<h4> Jornada 2 </h4>
+</div>
+
 
 
 ### Comandos/ Feedbacks (2 pts)
@@ -48,10 +57,32 @@ Quais são os comandos/ operacões possíveis do seu controle?
 
 Quais os feedbacks que seu controle vai fornecer ao usuário?
 -->
-Comandos:
-Acelearar para frente, para trás, virar para os lados, drift, usar itens, selecionar menus e liga/desliga.
-Feedbacks:
-Diferentes leds para diferentes botões, vibração. 
+
+<div align ="center">
+<h4> Comandos </h4>
+</div>
+
+- Acelearar para frente
+
+- Acelerar para trás
+
+- Virar para os lados
+
+- Drift
+
+- Usar itens
+
+- Selecionar e percorrer menus e configuracoes do jogo ( provavelmente por um joystick) 
+
+- Botao liga/desliga.
+
+<div align ="center">
+<h4> Feedback </h4>
+</div>
+
+- Leds para indicação de botoes pressionados
+
+- Vibração em caso de dano
 
 ## In/OUT (3 pts)
 
@@ -61,6 +92,9 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 - Avanca música: Push button amarelo
 - Volume da música: Fita de LED indicando potência do som
 -->
+
+Acelearar para frente : 
+
 
 ### Design (2 pts)
 
