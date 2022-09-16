@@ -72,7 +72,7 @@ Quais os feedbacks que seu controle vai fornecer ao usuário?
 
 - Usar itens
 
-- Selecionar e percorrer menus e configuracoes do jogo ( provavelmente por um joystick) 
+- Selecionar e percorrer menus e configuracoes do jogo 
 
 - Botao liga/desliga.
 
@@ -82,7 +82,7 @@ Quais os feedbacks que seu controle vai fornecer ao usuário?
 
 - Leds para indicação de botoes pressionados
 
-- Vibração em caso de dano
+- Vibração em caso de dano 
 
 ## In/OUT (3 pts)
 
@@ -93,8 +93,33 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 - Volume da música: Fita de LED indicando potência do som
 -->
 
-Acelearar para frente : 
 
+<div align ="center">
+<h4> Comandos </h4>
+</div>
+
+- Acelearar para frente ou para trás: <b>Potenciômetro</b> 
+
+- Virar para os lados : <b> IMU </b>
+
+- Drift : <b>Push button vermelho</b>
+
+- Usar itens : <b>Push button azul</b>
+
+- Selecionar e percorrer menus e configuracoes do jogo : <b>Joypad</b>
+
+- Botao liga/desliga : <b>Mini illuminated pushbutton</b>
+
+
+<div align ="center">
+<h4> Feedback </h4>
+</div>
+
+- Botao vermelho pressionado : LED vermelho
+
+- Botao azul pressionado : LED azul
+
+- Vibração em caso de dano : Vibracall
 
 ### Design (2 pts)
 
