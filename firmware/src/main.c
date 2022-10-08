@@ -19,17 +19,23 @@
 #define LED_IDX      8
 #define LED_IDX_MASK (1 << LED_IDX)
 
-// Botão
+// Botão placa
 #define BUT_PIO      PIOA
 #define BUT_PIO_ID   ID_PIOA
 #define BUT_IDX      11
 #define BUT_IDX_MASK (1 << BUT_IDX)
 
+// Botão AZUL protoboard PD30
+#define BUT1_PIO      PIOD
+#define BUT1_PIO_ID   ID_PIOD
+#define BUT1_IDX      30
+#define BUT1_IDX_MASK (1 << BUT1_IDX)
+
 // usart (bluetooth ou serial)
 // Descomente para enviar dados
 // pela serial debug
 
-//#define DEBUG_SERIAL
+#define DEBUG_SERIAL
 
 #ifdef DEBUG_SERIAL
 #define USART_COM USART1
@@ -42,6 +48,9 @@
 /************************************************************************/
 /* RTOS                                                                 */
 /************************************************************************/
+
+// Fila
+QueueHandle_t xQueueButPressed;
 
 #define TASK_BLUETOOTH_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
 #define TASK_BLUETOOTH_STACK_PRIORITY        (tskIDLE_PRIORITY)
@@ -103,19 +112,61 @@ extern void vApplicationMallocFailedHook(void) {
 /* handlers / callbacks                                                 */
 /************************************************************************/
 
+void but1_callback(void)
+{
+	
+	// Indica que o botão 1 foi pressionado:
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	char butID = 'A';
+	xQueueSendFromISR(xQueueButPressed,  (void *)&butID , &xHigherPriorityTaskWoken);
+
+}
+
 /************************************************************************/
 /* funcoes                                                              */
 /************************************************************************/
 
+
+void buts_config(void){
+	
+	// Inicializa PIO dos botões
+	pmc_enable_periph_clk(BUT1_PIO_ID);
+	
+	
+	// Inicializando botoes como entrada , configurando debounce
+	pio_configure(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK,  PIO_DEBOUNCE);
+	
+	// Aplicando filtro debounce
+	pio_set_debounce_filter(BUT1_PIO, BUT1_IDX_MASK, 60);
+}
+
+
+void but_interrupt_config(Pio *p_pio , uint32_t pio_id, const uint32_t ul_mask , uint32_t priority){
+	
+	// Ativa interrupção e limpa primeira IRQ gerada na ativacao
+	pio_enable_interrupt(p_pio, ul_mask);
+	pio_get_interrupt_status(p_pio);
+	
+	// Configura NVIC para receber interrupcoes do PIO dos botões com mesma prioridade.
+	NVIC_EnableIRQ(pio_id);
+	NVIC_SetPriority(pio_id, priority);
+}
+
 void io_init(void) {
 
-	// Ativa PIOs
-	pmc_enable_periph_clk(LED_PIO_ID);
-	pmc_enable_periph_clk(BUT_PIO_ID);
-
-	// Configura Pinos
-	pio_configure(LED_PIO, PIO_OUTPUT_0, LED_IDX_MASK, PIO_DEFAULT | PIO_DEBOUNCE);
-	pio_configure(BUT_PIO, PIO_INPUT, BUT_IDX_MASK, PIO_PULLUP);
+	buts_config();
+	
+	
+	pio_handler_set(BUT1_PIO,
+					BUT1_PIO_ID,
+					BUT1_IDX_MASK,
+					PIO_IT_RISE_EDGE,
+					but1_callback);
+	
+	
+	// Ativa interrupção nos botões:
+	but_interrupt_config(BUT1_PIO, BUT1_PIO_ID, BUT1_IDX_MASK, 4);
+	
 }
 
 static void configure_console(void) {
@@ -219,26 +270,31 @@ void task_bluetooth(void) {
 	config_usart0();
 	hc05_init();
 
-	// configura LEDs e Botões
+	// configura  botões
 	io_init();
 
 	char button1 = '0';
 	char eof = 'X';
+	char butPressed;
 
 	// Task não deve retornar.
 	while(1) {
-		// atualiza valor do botão
-		if(pio_get(BUT_PIO, PIO_INPUT, BUT_IDX_MASK) == 0) {
+		
+		// Caso identificao interrupção:
+		if (xQueueReceive(xQueueButPressed, &butPressed,  500)) {
+			printf("APERTOUUUU  %c", butPressed);
 			button1 = '1';
-		} else {
-			button1 = '0';
 		}
-
+		
 		// envia status botão
 		while(!usart_is_tx_ready(USART_COM)) {
-			vTaskDelay(10 / portTICK_PERIOD_MS);
+			vTaskDelay(10 / portTICK_PERIOD_MS);			
 		}
+		
 		usart_write(USART_COM, button1);
+		
+		// Atualiza status do botão:
+		button1 = '0';
 		
 		// envia fim de pacote
 		while(!usart_is_tx_ready(USART_COM)) {
@@ -264,6 +320,14 @@ int main(void) {
 
 	/* Create task to make led blink */
 	xTaskCreate(task_bluetooth, "BLT", TASK_BLUETOOTH_STACK_SIZE, NULL,	TASK_BLUETOOTH_STACK_PRIORITY, NULL);
+
+	
+	// Fila que indica funcionamento caso senha errada ou certa:
+	xQueueButPressed = xQueueCreate(32, sizeof(char));
+	
+	if (xQueueButPressed == NULL)
+		printf("falha em criar a queue \n");
+
 
 	/* Start the scheduler. */
 	vTaskStartScheduler();
