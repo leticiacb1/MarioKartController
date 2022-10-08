@@ -266,43 +266,52 @@ void task_main(void) {
 	// configura  botões
 	io_init();
 
-	// Espera (500ms) em ticks
-	 TickType_t wait = 500 / portTICK_PERIOD_MS;
-	char button1 = '0';
+	// Espera (200ms) em ticks
+	 TickType_t wait = 200 / portTICK_PERIOD_MS;
+	char button = '0';
 	char eof = 'X';
+	
+	uint32_t mudou = 1;
 
-	// Task não deve retornar.
+	// Protocolo:
+	// '1' -> botão azul apertado
+	// '2' -> botão verde apertado
+	// '0' -> nenhum botão apertado
+	
 	while(1) {
 		
 		// Caso identificao interrupção:
 		if (xSemaphoreTake(xSemaphoreBlue, wait)) {
-			printf("\n APERTOU  AZUL \n");
-			button1 = '1';
+			button = '1';
+			mudou = 1;
 		}
 		
 		if (xSemaphoreTake(xSemaphoreGreen, wait)) {
-			printf("\n APERTOU  VERDE \n");
-			button1 = '1';
+			button = '2';
+			mudou = 1;
 		}
 		
-		// envia status botão
-		while(!usart_is_tx_ready(USART_COM)) {
-			vTaskDelay(10 / portTICK_PERIOD_MS);			
+		
+		if(mudou){
+			// envia status botão
+			while(!usart_is_tx_ready(USART_COM)) {
+				vTaskDelay(10 / portTICK_PERIOD_MS);			
+			}
+		
+			usart_write(USART_COM, button);
+		
+			// envia fim de pacote
+			while(!usart_is_tx_ready(USART_COM)) {
+				vTaskDelay(10 / portTICK_PERIOD_MS);
+			}
+			usart_write(USART_COM, eof);
+			
+			// Atualiza status do botão:
+			button = '0';
+			mudou = 0;
+			
 		}
-		
-		usart_write(USART_COM, button1);
-		
-		// Atualiza status do botão:
-		button1 = '0';
-		
-		// envia fim de pacote
-		while(!usart_is_tx_ready(USART_COM)) {
-			vTaskDelay(10 / portTICK_PERIOD_MS);
-		}
-		usart_write(USART_COM, eof);
 
-		// dorme por 500 ms
-		vTaskDelay(500 / portTICK_PERIOD_MS);
 	}
 }
 
