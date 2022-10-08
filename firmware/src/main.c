@@ -13,23 +13,18 @@
 /* defines                                                              */
 /************************************************************************/
 
-// LEDs
-#define LED_PIO      PIOC
-#define LED_PIO_ID   ID_PIOC
-#define LED_IDX      8
-#define LED_IDX_MASK (1 << LED_IDX)
-
-// Botão placa
-#define BUT_PIO      PIOA
-#define BUT_PIO_ID   ID_PIOA
-#define BUT_IDX      11
-#define BUT_IDX_MASK (1 << BUT_IDX)
-
 // Botão AZUL protoboard PD30
 #define BUT1_PIO      PIOD
 #define BUT1_PIO_ID   ID_PIOD
 #define BUT1_IDX      30
 #define BUT1_IDX_MASK (1 << BUT1_IDX)
+
+// Botão VERDE protoboard PA6
+#define BUT2_PIO      PIOA
+#define BUT2_PIO_ID   ID_PIOA
+#define BUT2_IDX      6
+#define BUT2_IDX_MASK (1 << BUT2_IDX)
+
 
 // usart (bluetooth ou serial)
 // Descomente para enviar dados
@@ -49,11 +44,12 @@
 /* RTOS                                                                 */
 /************************************************************************/
 
-// Fila
-QueueHandle_t xQueueButPressed;
+// Semaforos
+SemaphoreHandle_t xSemaphoreBlue;
+SemaphoreHandle_t xSemaphoreGreen;
 
-#define TASK_BLUETOOTH_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
-#define TASK_BLUETOOTH_STACK_PRIORITY        (tskIDLE_PRIORITY)
+#define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_MAIN_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
 /************************************************************************/
 /* prototypes                                                           */
@@ -67,44 +63,23 @@ extern void vApplicationMallocFailedHook(void);
 extern void xPortSysTickHandler(void);
 
 /************************************************************************/
-/* constants                                                            */
-/************************************************************************/
-
-/************************************************************************/
-/* variaveis globais                                                    */
-/************************************************************************/
-
-/************************************************************************/
 /* RTOS application HOOK                                                */
 /************************************************************************/
 
-/* Called if stack overflow during execution */
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,
 signed char *pcTaskName) {
 	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
-	/* If the parameters have been corrupted then inspect pxCurrentTCB to
-	* identify which task has overflowed its stack.
-	*/
 	for (;;) {
 	}
 }
 
-/* This function is called by FreeRTOS idle task */
 extern void vApplicationIdleHook(void) {
 	pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
 }
 
-/* This function is called by FreeRTOS each tick */
 extern void vApplicationTickHook(void) { }
 
 extern void vApplicationMallocFailedHook(void) {
-	/* Called if a call to pvPortMalloc() fails because there is insufficient
-	free memory available in the FreeRTOS heap.  pvPortMalloc() is called
-	internally by FreeRTOS API functions that create tasks, queues, software
-	timers, and semaphores.  The size of the FreeRTOS heap is set by the
-	configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
-
-	/* Force an assert. */
 	configASSERT( ( volatile void * ) NULL );
 }
 
@@ -115,10 +90,18 @@ extern void vApplicationMallocFailedHook(void) {
 void but1_callback(void)
 {
 	
-	// Indica que o botão 1 foi pressionado:
+	// Indica que o botão azul foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	char butID = 'A';
-	xQueueSendFromISR(xQueueButPressed,  (void *)&butID , &xHigherPriorityTaskWoken);
+	xSemaphoreGiveFromISR(xSemaphoreBlue, xHigherPriorityTaskWoken);
+
+}
+
+void but2_callback(void)
+{
+	
+	// Indica que o botão verde foi pressionado:
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xSemaphoreGiveFromISR(xSemaphoreGreen, xHigherPriorityTaskWoken);
 
 }
 
@@ -131,13 +114,16 @@ void buts_config(void){
 	
 	// Inicializa PIO dos botões
 	pmc_enable_periph_clk(BUT1_PIO_ID);
+	pmc_enable_periph_clk(BUT2_PIO_ID);
 	
 	
 	// Inicializando botoes como entrada , configurando debounce
 	pio_configure(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK,  PIO_DEBOUNCE);
+	pio_configure(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK,  PIO_DEBOUNCE);
 	
 	// Aplicando filtro debounce
 	pio_set_debounce_filter(BUT1_PIO, BUT1_IDX_MASK, 60);
+	pio_set_debounce_filter(BUT2_PIO, BUT2_IDX_MASK, 60);
 }
 
 
@@ -163,9 +149,16 @@ void io_init(void) {
 					PIO_IT_RISE_EDGE,
 					but1_callback);
 	
+	pio_handler_set(BUT2_PIO,
+					BUT2_PIO_ID,
+					BUT2_IDX_MASK,
+					PIO_IT_RISE_EDGE,
+					but2_callback);
+	
 	
 	// Ativa interrupção nos botões:
 	but_interrupt_config(BUT1_PIO, BUT1_PIO_ID, BUT1_IDX_MASK, 4);
+	but_interrupt_config(BUT2_PIO, BUT2_PIO_ID, BUT2_IDX_MASK, 4);
 	
 }
 
@@ -263,9 +256,9 @@ int hc05_init(void) {
 /* TASKS                                                                */
 /************************************************************************/
 
-void task_bluetooth(void) {
-	printf("Task Bluetooth started \n");
+void task_main(void) {
 	
+	printf("Task main started \n");
 	printf("Inicializando HC05 \n");
 	config_usart0();
 	hc05_init();
@@ -273,16 +266,22 @@ void task_bluetooth(void) {
 	// configura  botões
 	io_init();
 
+	// Espera (500ms) em ticks
+	 TickType_t wait = 500 / portTICK_PERIOD_MS;
 	char button1 = '0';
 	char eof = 'X';
-	char butPressed;
 
 	// Task não deve retornar.
 	while(1) {
 		
 		// Caso identificao interrupção:
-		if (xQueueReceive(xQueueButPressed, &butPressed,  500)) {
-			printf("APERTOUUUU  %c", butPressed);
+		if (xSemaphoreTake(xSemaphoreBlue, wait)) {
+			printf("\n APERTOU  AZUL \n");
+			button1 = '1';
+		}
+		
+		if (xSemaphoreTake(xSemaphoreGreen, wait)) {
+			printf("\n APERTOU  VERDE \n");
 			button1 = '1';
 		}
 		
@@ -318,18 +317,19 @@ int main(void) {
 
 	configure_console();
 
-	/* Create task to make led blink */
-	xTaskCreate(task_bluetooth, "BLT", TASK_BLUETOOTH_STACK_SIZE, NULL,	TASK_BLUETOOTH_STACK_PRIORITY, NULL);
+	// Cria task
+	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
 
 	
-	// Fila que indica funcionamento caso senha errada ou certa:
-	xQueueButPressed = xQueueCreate(32, sizeof(char));
+	// Cria semáforos para verificar quao botão foi apertado:
+	xSemaphoreBlue = xSemaphoreCreateBinary();
+	xSemaphoreGreen = xSemaphoreCreateBinary();
 	
-	if (xQueueButPressed == NULL)
-		printf("falha em criar a queue \n");
+	if (xSemaphoreBlue == NULL || xSemaphoreGreen == NULL)
+		printf("falha em criar semáforo \n");
 
 
-	/* Start the scheduler. */
+	// Start the scheduler.
 	vTaskStartScheduler();
 
 	while(1){}
