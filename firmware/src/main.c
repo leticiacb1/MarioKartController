@@ -32,6 +32,7 @@
 #define BUTONOFF_IDX_MASK (1 << BUTONOFF_IDX)
 
 #define END_OF_PCK	  'X'
+#define WAIT_TIME	  100 / portTICK_PERIOD_MS	
 
 // usart (bluetooth ou serial)
 // Descomente para enviar dados
@@ -51,14 +52,18 @@
 /* RTOS                                                                 */
 /************************************************************************/
 
+// Filas 
+QueueHandle_t xQueueKeyUp;
+QueueHandle_t xQueueKeyDown;
+
 // Semaforosx
 SemaphoreHandle_t xSemaphoreOnOff;
 
-SemaphoreHandle_t xSemaphoreBlueUp;
-SemaphoreHandle_t xSemaphoreBlueDown;
+//SemaphoreHandle_t xSemaphoreBlueUp;
+//SemaphoreHandle_t xSemaphoreBlueDown;
 
-SemaphoreHandle_t xSemaphoreGreenUp;
-SemaphoreHandle_t xSemaphoreGreenDown;
+//SemaphoreHandle_t xSemaphoreGreenUp;
+//SemaphoreHandle_t xSemaphoreGreenDown;
 
 #define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
 #define TASK_MAIN_STACK_PRIORITY        (tskIDLE_PRIORITY)
@@ -108,31 +113,37 @@ void but_on_off_callback(void){
 void but1_callback(void)
 {
 	
+	char butId = '1';
 	// Indica que o botão azul foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
-		xSemaphoreGiveFromISR(xSemaphoreBlueDown, xHigherPriorityTaskWoken);
+		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+		//xSemaphoreGiveFromISR(xSemaphoreBlueDown, xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
-		xSemaphoreGiveFromISR(xSemaphoreBlueUp, xHigherPriorityTaskWoken);
+		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+		//xSemaphoreGiveFromISR(xSemaphoreBlueUp, xHigherPriorityTaskWoken);
 	}
 	
 	
 }
 
 void but2_callback(void)
-{
+{	
+	char butId = '2';
 	// Indica que o botão verde foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
-		xSemaphoreGiveFromISR(xSemaphoreGreenDown, xHigherPriorityTaskWoken);
+		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+		//xSemaphoreGiveFromISR(xSemaphoreGreenDown, xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
-		xSemaphoreGiveFromISR(xSemaphoreGreenUp, xHigherPriorityTaskWoken);
+		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+		//xSemaphoreGiveFromISR(xSemaphoreGreenUp, xHigherPriorityTaskWoken);
 	}
 }
 
@@ -289,28 +300,29 @@ int hc05_init(void) {
 	vTaskDelay( 500 / portTICK_PERIOD_MS);
 	usart_send_command(USART_COM, buffer_rx, 1000, "AT", 100);
 	vTaskDelay( 500 / portTICK_PERIOD_MS);
-	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000", 100);
+	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000\n", 100);
 }
 
-void send_package(char id , char status){
-	
-	// Envia id botão:
+void send(char arg){
 	while(!usart_is_tx_ready(USART_COM)) {
 		vTaskDelay(10 / portTICK_PERIOD_MS);
 	}
-	usart_write(USART_COM, id);
+	usart_write(USART_COM, arg);
+}
+
+void send_package(char tipo, char id , char status ){
+		
+	// Envia tipo:
+	send(tipo);	
+		
+	// Envia id do botão:
+	send(id);
 	
 	// Envia status do botão:
-	while(!usart_is_tx_ready(USART_COM)) {
-		vTaskDelay(10 / portTICK_PERIOD_MS);
-	}
-	usart_write(USART_COM, status);
+	send(status);
 	
 	// envia fim de pacote
-	while(!usart_is_tx_ready(USART_COM)) {
-		vTaskDelay(10 / portTICK_PERIOD_MS);
-	}
-	usart_write(USART_COM, END_OF_PCK);
+	send(END_OF_PCK);
 }
 
 /************************************************************************/
@@ -326,63 +338,65 @@ void task_main(void) {
 
 	// Configura  botões
 	io_init();
-
-	// Espera (200ms) em ticks
-	TickType_t wait = 100 / portTICK_PERIOD_MS;
-		
+	
+	char tipo;
 	char button;
+	char button_ID;
 	char status;
 	
-	uint32_t liga = 0;
-	uint32_t mudou = 1;
+	uint32_t handshake = 0;
+	uint32_t send = 0;
 
-	// Protocolo:
+	//                PROTOCOLO
+	// ----------------------------------------------
+	// tipo de dado -> A (analogico) D (Digital)
 	// id_botão     -> botão azul '1'   botão verde '2'
 	// status botão -> '1' pressionado  '0' soltou
 	
+	//                HANDSHAKE
+	// --------------------------------------------- 
+	// tipo = 'H'
+	// id_botao = '0'
+	// status = '0'
+	
 	while(1) {
 		
-		/* BOTAO INSTÁVEL:
-		if(xSemaphoreTake(xSemaphoreOnOff, wait)){
+		
+		if(xQueueReceive(xQueueKeyDown, &button, 0)){
+			tipo = 'D';
+			button_ID = button;
+			status = '1';
+			send = 1;
+		}
+		
+		if(xQueueReceive(xQueueKeyUp, &button, 0)){
+			tipo = 'D';
+			button_ID = button;
+			status = '0';
+			send = 1;
+		}
+		
+		// HANDSHAKE
+		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
+			send_package('H', '0', '0');
 			
-			printf("LIGA/DESLIGA\n");
-			
-			// Handshake (Liga/desliga)			
-			if(liga == 0){
-				liga = 1;
-			}else{
-				liga = 0;
+			if(handshake){
+				handshake = 0;
+				}else{
+				handshake  = 1;
 			}
-			
-			send_package('0','0');
-		}*/
-		
-		if (xSemaphoreTake(xSemaphoreBlueDown, wait)) {
-			button = '1';
-			status = '1';
-			mudou = 1;
-		}else if (xSemaphoreTake(xSemaphoreBlueUp, wait)) {
-			button = '1';
-			status = '0';
-			mudou = 1;
 		}
 		
-		
-		if (xSemaphoreTake(xSemaphoreGreenDown, wait)) {
-			button = '2';
-			status = '1';
-			mudou = 1;
-		}else if (xSemaphoreTake(xSemaphoreGreenUp, wait)) {
-			button = '2';
-			status = '0';
-			mudou = 1;
+		if(handshake == 0){
+			send = 0;
 		}
-						
-		if(mudou){
+		
+		// Envio de dados	
+		if(send && handshake){
 			// Envia pacote:
-			send_package(button, status);
+			send_package(tipo, button_ID, status);
 			// Variável de envio
-			mudou = 0;	
+			send = 0;	
 		}
 
 	}
@@ -393,27 +407,27 @@ void task_main(void) {
 /************************************************************************/
 
 int main(void) {
-	/* Initialize the SAM system */
+	
+	// Inicializa sistema
 	sysclk_init();
 	board_init();
-
 	configure_console();
 
 	// Cria task
 	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
-
 	
 	// Cria semáforos para verificar quao botão foi apertado:
 	xSemaphoreOnOff = xSemaphoreCreateBinary();
 	
-	xSemaphoreBlueUp = xSemaphoreCreateBinary();
-	xSemaphoreBlueDown = xSemaphoreCreateBinary();
-	
-	xSemaphoreGreenUp = xSemaphoreCreateBinary();
-	xSemaphoreGreenDown = xSemaphoreCreateBinary();
-	
-	if (xSemaphoreBlueUp == NULL || xSemaphoreBlueDown == NULL || xSemaphoreGreenUp == NULL || xSemaphoreGreenDown == NULL || xSemaphoreOnOff == NULL)
+	if (xSemaphoreOnOff == NULL)
 		printf("falha em criar semáforo \n");
+	
+	// Cria fila
+	xQueueKeyUp = xQueueCreate(100, sizeof(char));
+	xQueueKeyDown = xQueueCreate(100, sizeof(char));
+	
+	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL)
+		printf("falha em criar fila \n");
 
 	// Start the scheduler.
 	vTaskStartScheduler();
