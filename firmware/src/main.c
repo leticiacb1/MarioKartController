@@ -13,6 +13,11 @@
 /* defines                                                              */
 /************************************************************************/
 
+// Acelera Ré PD30 AFEC
+#define AFEC_POT AFEC0
+#define AFEC_POT_ID ID_AFEC0
+#define AFEC_POT_CHANNEL 0 
+
 // Botão AZUL protoboard PD26
 #define BUT1_PIO      PIOD
 #define BUT1_PIO_ID   ID_PIOD
@@ -55,12 +60,15 @@
 // Filas 
 QueueHandle_t xQueueKeyUp;
 QueueHandle_t xQueueKeyDown;
+QueueHandle_t xQueueAfec;
 
 // Semaforosx
 SemaphoreHandle_t xSemaphoreOnOff;
 
 #define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
 #define TASK_MAIN_STACK_PRIORITY        (tskIDLE_PRIORITY)
+#define TASK_POT_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_POT_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
 /************************************************************************/
 /* prototypes                                                           */
@@ -133,6 +141,25 @@ void but2_callback(void)
 		// Borda de descida (Soltou):
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
 	}
+}
+
+void TC1_Handler(void) {
+	volatile uint32_t ul_dummy;
+
+	ul_dummy = tc_get_status(TC0, 1);
+
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+
+	/* Selecina canal e inicializa conversão */
+	afec_channel_enable(AFEC_POT, AFEC_POT_CHANNEL);
+	afec_start_software_conversion(AFEC_POT);
+}
+
+static void AFEC_pot_Callback(void) {
+	int value = afec_channel_get_value(AFEC_POT, AFEC_POT_CHANNEL);
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfec, &value , &xHigherPriorityTaskWoken);
 }
 
 /************************************************************************/
@@ -291,6 +318,68 @@ int hc05_init(void) {
 	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000\n", 100);
 }
 
+static void config_AFEC_pot(Afec *afec, uint32_t afec_id, uint32_t afec_channel,
+                            afec_callback_t callback) {
+  /*************************************
+   * Ativa e configura AFEC
+   *************************************/
+  /* Ativa AFEC - 0 */
+  afec_enable(afec);
+
+  /* struct de configuracao do AFEC */
+  struct afec_config afec_cfg;
+
+  /* Carrega parametros padrao */
+  afec_get_config_defaults(&afec_cfg);
+
+  /* Configura AFEC */
+  afec_init(afec, &afec_cfg);
+
+  /* Configura trigger por software */
+  afec_set_trigger(afec, AFEC_TRIG_SW);
+
+  /*** Configuracao específica do canal AFEC ***/
+  struct afec_ch_config afec_ch_cfg;
+  afec_ch_get_config_defaults(&afec_ch_cfg);
+  afec_ch_cfg.gain = AFEC_GAINVALUE_0;
+  afec_ch_set_config(afec, afec_channel, &afec_ch_cfg);
+
+  /*
+  * Calibracao:
+  * Because the internal ADC offset is 0x200, it should cancel it and shift
+  down to 0.
+  */
+  afec_channel_set_analog_offset(afec, afec_channel, 0x200);
+
+  /***  Configura sensor de temperatura ***/
+  struct afec_temp_sensor_config afec_temp_sensor_cfg;
+
+  afec_temp_sensor_get_config_defaults(&afec_temp_sensor_cfg);
+  afec_temp_sensor_set_config(afec, &afec_temp_sensor_cfg);
+
+  /* configura IRQ */
+  afec_set_callback(afec, afec_channel, callback, 1);
+  NVIC_SetPriority(afec_id, 4);
+  NVIC_EnableIRQ(afec_id);
+}
+
+void TC_init(Tc *TC, int ID_TC, int TC_CHANNEL, int freq) {
+  uint32_t ul_div;
+  uint32_t ul_tcclks;
+  uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+  pmc_enable_periph_clk(ID_TC);
+
+  tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+  tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+  tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+  NVIC_SetPriority((IRQn_Type)ID_TC, 4);
+  NVIC_EnableIRQ((IRQn_Type)ID_TC);
+  tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+}
+
+
 void send(char arg){
 	while(!usart_is_tx_ready(USART_COM)) {
 		vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -316,6 +405,23 @@ void send_package(char tipo, char id , char status ){
 /************************************************************************/
 /* TASKS                                                                */
 /************************************************************************/
+
+void task_potenciometro(void){
+	printf("Task potenciometro started \n");
+	
+	// configura ADC e TC para controlar a leitura
+	config_AFEC_pot(AFEC_POT, AFEC_POT_ID, AFEC_POT_CHANNEL, AFEC_pot_Callback);
+	TC_init(TC0, ID_TC1, 1, 10);
+	tc_start(TC0, 1);
+	
+	int value;
+	while(1){
+		if (xQueueReceive(xQueueAfec, &(value), 1000)) {
+			printf("Pot: %d \n", value);
+		}
+	}
+	
+}
 
 void task_main(void) {
 	
@@ -403,6 +509,7 @@ int main(void) {
 
 	// Cria task
 	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
 	
 	// Cria semáforos para verificar quao botão foi apertado:
 	xSemaphoreOnOff = xSemaphoreCreateBinary();
@@ -413,8 +520,9 @@ int main(void) {
 	// Cria fila
 	xQueueKeyUp = xQueueCreate(100, sizeof(char));
 	xQueueKeyDown = xQueueCreate(100, sizeof(char));
+	xQueueAfec = xQueueCreate(100, sizeof(uint32_t));
 	
-	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL)
+	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL)
 		printf("falha em criar fila \n");
 
 	// Start the scheduler.
