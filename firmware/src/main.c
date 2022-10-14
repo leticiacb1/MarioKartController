@@ -8,6 +8,7 @@
 #include <asf.h>
 #include "conf_board.h"
 #include <string.h>
+#include <math.h>
 
 /************************************************************************/
 /* defines                                                              */
@@ -61,6 +62,7 @@
 QueueHandle_t xQueueKeyUp;
 QueueHandle_t xQueueKeyDown;
 QueueHandle_t xQueueAfec;
+QueueHandle_t xQueuePot;
 
 // Semaforosx
 SemaphoreHandle_t xSemaphoreOnOff;
@@ -415,10 +417,45 @@ void task_potenciometro(void){
 	tc_start(TC0, 1);
 	
 	int value;
+	
+	// Variável de estado , envio de dados apenas se houver mudança de estado:
+	uint32_t send = 0;
+	char state;
+	// 's' -> stop
+	// 'd' -> decelerate
+	// 'a' -> accelerate
+	
 	while(1){
-		if (xQueueReceive(xQueueAfec, &(value), 1000)) {
-			printf("Pot: %d \n", value);
+		if (xQueueReceive(xQueueAfec, &(value), 80)) {
+			
+			if( log10(value) > 3.5){
+				if(state != 'a'){
+					send = 1;
+					state = 'a';
+				}
+				
+			}else if( log10(value) < 2.5){
+				
+				if(state != 'd'){
+					send = 1;
+					state = 'd';
+				}
+				
+			}else {
+				if(state != 's'){
+					send = 1;
+					state = 's';
+				}	
+			}
+			
 		}
+		
+		if(send){
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xQueueSend(xQueuePot, &state,  &xHigherPriorityTaskWoken);
+			send = 0;
+		}
+		
 	}
 	
 }
@@ -439,6 +476,8 @@ void task_main(void) {
 	char status;
 	
 	char handshake = '0';
+	char speed_state;
+	
 	int send = 0;
 
 	//                PROTOCOLO
@@ -454,6 +493,10 @@ void task_main(void) {
 	// status = '0' (antes ligado) '1' (antes desigado)
 	
 	while(1) {
+		
+		if(xQueueReceive(xQueuePot, &speed_state, 0)){
+			printf("\n %c \n", speed_state);
+		}
 		
 		if(xQueueReceive(xQueueKeyDown, &button, 0)){
 			tipo = 'D';
@@ -521,8 +564,9 @@ int main(void) {
 	xQueueKeyUp = xQueueCreate(100, sizeof(char));
 	xQueueKeyDown = xQueueCreate(100, sizeof(char));
 	xQueueAfec = xQueueCreate(100, sizeof(uint32_t));
+	xQueuePot = xQueueCreate(100, sizeof(char));
 	
-	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL)
+	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL )
 		printf("falha em criar fila \n");
 
 	// Start the scheduler.
