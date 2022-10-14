@@ -496,6 +496,7 @@ void task_main(void) {
 		
 		if(xQueueReceive(xQueuePot, &speed_state, 0)){
 			printf("\n %c \n", speed_state);
+			send_package('A', speed_state , '0');
 		}
 		
 		if(xQueueReceive(xQueueKeyDown, &button, 0)){

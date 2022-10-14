@@ -6,7 +6,7 @@ import pyvjoy # Windows apenas
 
 class MyControllerMap:
     def __init__(self):
-        self.button = {'A': 1 , 'B' : 2}
+        self.button = {'A': 1 , 'B' : 2 , 'X': 3 , 'Z': 4}
 
 class SerialControllerInterface:
 
@@ -45,7 +45,19 @@ class SerialControllerInterface:
             logging.info("-- HANDSHAKE CONNECTED--")
             self.connected  =True
 
-    def input_action(self,buttonId, status):
+    def input_analog_action(self,speed_state):
+        if(speed_state == 'a'):
+            logging.info("\nAcelera\n")
+            self.j.set_button(self.mapping.button['X'], 1)  
+        elif(speed_state == 'd'):
+            logging.info("\nRe\n")
+            self.j.set_button(self.mapping.button['Z'], 1)
+        else:
+            logging.info("Para")
+            self.j.set_button(self.mapping.button['X'], 0)
+            self.j.set_button(self.mapping.button['Z'], 0)
+
+    def input_digital_action(self,buttonId, status):
         logging.info("Pressing \t")
         logging.info(buttonId)
 
@@ -63,7 +75,7 @@ class SerialControllerInterface:
             self.incoming = self.ser.read()
 
         data_type = self.ser.read()
-        but_pressed = self.ser.read()
+        id_state = self.ser.read()
         status = self.ser.read()
         
         # Pedido de desconexao:
@@ -74,15 +86,22 @@ class SerialControllerInterface:
         # Digital value
         if data_type == b'D':
             
-            if(but_pressed == b'A'):
-                self.input_action('A', status)
-            if(but_pressed == b'B'):
-                self.input_action('B', status)
+            if(id_state == b'A'):
+                self.input_digital_action('A', status)
+            if(id_state == b'B'):
+                self.input_digital_action('B', status)
+        print(data_type)
 
         # Analogic value
         if data_type == b'A':
-            ...
-
+            print(id_state)
+            if(id_state == b'a'):
+                self.input_analog_action('a')
+            elif(id_state == b'd'):
+                self.input_analog_action('d')
+            elif(id_state == b's'):
+                self.input_analog_action('s')
+                
         self.incoming = self.ser.read()
 
 class DummyControllerInterface:
