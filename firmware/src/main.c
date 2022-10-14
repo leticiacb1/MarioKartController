@@ -59,12 +59,6 @@ QueueHandle_t xQueueKeyDown;
 // Semaforosx
 SemaphoreHandle_t xSemaphoreOnOff;
 
-//SemaphoreHandle_t xSemaphoreBlueUp;
-//SemaphoreHandle_t xSemaphoreBlueDown;
-
-//SemaphoreHandle_t xSemaphoreGreenUp;
-//SemaphoreHandle_t xSemaphoreGreenDown;
-
 #define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
 #define TASK_MAIN_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
@@ -113,37 +107,31 @@ void but_on_off_callback(void){
 void but1_callback(void)
 {
 	
-	char butId = '1';
+	char butId = 'A';
 	// Indica que o botão azul foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
-		//xSemaphoreGiveFromISR(xSemaphoreBlueDown, xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
-		//xSemaphoreGiveFromISR(xSemaphoreBlueUp, xHigherPriorityTaskWoken);
 	}
-	
-	
 }
 
 void but2_callback(void)
 {	
-	char butId = '2';
+	char butId = 'B';
 	// Indica que o botão verde foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
-		//xSemaphoreGiveFromISR(xSemaphoreGreenDown, xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
-		//xSemaphoreGiveFromISR(xSemaphoreGreenUp, xHigherPriorityTaskWoken);
 	}
 }
 
@@ -166,7 +154,7 @@ void buts_config(void){
 	pio_configure(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK,  PIO_DEBOUNCE);
 	
 	// Aplicando filtro debounce
-	pio_set_debounce_filter(BUTONOFF_PIO, BUTONOFF_IDX_MASK, 600);
+	pio_set_debounce_filter(BUTONOFF_PIO, BUTONOFF_IDX_MASK, 80);
 	pio_set_debounce_filter(BUT1_PIO, BUT1_IDX_MASK, 80);
 	pio_set_debounce_filter(BUT2_PIO, BUT2_IDX_MASK, 80);
 }
@@ -344,8 +332,8 @@ void task_main(void) {
 	char button_ID;
 	char status;
 	
-	uint32_t handshake = 0;
-	uint32_t send = 0;
+	char handshake = '0';
+	int send = 0;
 
 	//                PROTOCOLO
 	// ----------------------------------------------
@@ -360,7 +348,6 @@ void task_main(void) {
 	// status = '0'
 	
 	while(1) {
-		
 		
 		if(xQueueReceive(xQueueKeyDown, &button, 0)){
 			tipo = 'D';
@@ -378,16 +365,17 @@ void task_main(void) {
 		
 		// HANDSHAKE
 		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
-			send_package('H', '0', '0');
 			
-			if(handshake){
-				handshake = 0;
+			if(handshake == '1'){
+				handshake = '0';
 				}else{
-				handshake  = 1;
+				handshake  = '1';
 			}
+			
+			send_package('H', '0', handshake);
 		}
 		
-		if(handshake == 0){
+		if(handshake == '0'){
 			send = 0;
 		}
 		
