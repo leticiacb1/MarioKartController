@@ -51,10 +51,10 @@ class SerialControllerInterface:
 
         if(status == b'1'):
             logging.info("- KeyDown \n")
+            self.j.set_button(self.mapping.button[buttonId], 1)  
         else:    
             logging.info("- KeyUp \n")
-
-        self.j.set_button(self.mapping.button[buttonId], status)   
+            self.j.set_button(self.mapping.button[buttonId], 0)  
 
     def update(self):
 
