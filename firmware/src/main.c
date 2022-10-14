@@ -13,22 +13,22 @@
 /* defines                                                              */
 /************************************************************************/
 
-// Botão AZUL protoboard PD30
+// Botão AZUL protoboard PD26
 #define BUT1_PIO      PIOD
 #define BUT1_PIO_ID   ID_PIOD
-#define BUT1_IDX      30
+#define BUT1_IDX      26
 #define BUT1_IDX_MASK (1 << BUT1_IDX)
 
-// Botão VERDE protoboard PA6
-#define BUT2_PIO      PIOA
-#define BUT2_PIO_ID   ID_PIOA
-#define BUT2_IDX      6
+// Botão VERDE protoboard PC19
+#define BUT2_PIO      PIOC
+#define BUT2_PIO_ID   ID_PIOC
+#define BUT2_IDX      19
 #define BUT2_IDX_MASK (1 << BUT2_IDX)
 
-// Botão LIGADESLIGA protoboard PC19
-#define BUTONOFF_PIO      PIOC
-#define BUTONOFF_PIO_ID   ID_PIOC
-#define BUTONOFF_IDX      19
+// Botão LIGADESLIGA protoboard PA2
+#define BUTONOFF_PIO      PIOA
+#define BUTONOFF_PIO_ID   ID_PIOA
+#define BUTONOFF_IDX      2
 #define BUTONOFF_IDX_MASK (1 << BUTONOFF_IDX)
 
 #define END_OF_PCK	  'X'
@@ -338,14 +338,14 @@ void task_main(void) {
 	//                PROTOCOLO
 	// ----------------------------------------------
 	// tipo de dado -> A (analogico) D (Digital)
-	// id_botão     -> botão azul '1'   botão verde '2'
+	// id_botão     -> botão azul 'A'   botão verde 'B'
 	// status botão -> '1' pressionado  '0' soltou
 	
 	//                HANDSHAKE
 	// --------------------------------------------- 
 	// tipo = 'H'
 	// id_botao = '0'
-	// status = '0'
+	// status = '0' (antes ligado) '1' (antes desigado)
 	
 	while(1) {
 		
