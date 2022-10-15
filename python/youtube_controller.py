@@ -6,7 +6,7 @@ import logging
 
 class MyControllerMap:
     def __init__(self):
-        self.button = {'A': 'L', 'B' : 'M'} 
+        self.button = {'A': 'X', 'B' : 'Z'} 
 
 class SerialControllerInterface:
     # Protocolo
@@ -32,9 +32,13 @@ class SerialControllerInterface:
         if data == b'1':
             logging.info("APERTOU AZUL")
             pyautogui.keyDown(self.mapping.button['A'])
+            time.sleep(0.1)
+            pyautogui.keyUp(self.mapping.button['A'])
         elif data == b'2':
             logging.info("APERTOU VERDE")
             pyautogui.keyDown(self.mapping.button['B'])
+            time.sleep(0.1)
+            pyautogui.keyUp(self.mapping.button['B'])
         elif data == b'0':
             logging.info("KEYUP")
             pyautogui.keyUp(self.mapping.button['A'])

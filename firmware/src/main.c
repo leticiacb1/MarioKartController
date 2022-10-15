@@ -19,10 +19,10 @@
 #define AFEC_POT_ID ID_AFEC0
 #define AFEC_POT_CHANNEL 0 
 
-// Botão AZUL protoboard PD26
-#define BUT1_PIO      PIOD
-#define BUT1_PIO_ID   ID_PIOD
-#define BUT1_IDX      26
+// Botão AZUL protoboard PA2
+#define BUT1_PIO      PIOA
+#define BUT1_PIO_ID   ID_PIOA
+#define BUT1_IDX      2
 #define BUT1_IDX_MASK (1 << BUT1_IDX)
 
 // Botão VERDE protoboard PC19
@@ -31,10 +31,10 @@
 #define BUT2_IDX      19
 #define BUT2_IDX_MASK (1 << BUT2_IDX)
 
-// Botão LIGADESLIGA protoboard PA2
-#define BUTONOFF_PIO      PIOA
-#define BUTONOFF_PIO_ID   ID_PIOA
-#define BUTONOFF_IDX      2
+// Botão LIGADESLIGA protoboard PD26
+#define BUTONOFF_PIO      PIOD
+#define BUTONOFF_PIO_ID   ID_PIOD
+#define BUTONOFF_IDX      26
 #define BUTONOFF_IDX_MASK (1 << BUTONOFF_IDX)
 
 #define END_OF_PCK	  'X'
@@ -494,23 +494,26 @@ void task_main(void) {
 	
 	while(1) {
 		
-		if(xQueueReceive(xQueuePot, &speed_state, 0)){
-			printf("\n %c \n", speed_state);
-			send_package('A', speed_state , '0');
-		}
-		
+		// DIGITAL
 		if(xQueueReceive(xQueueKeyDown, &button, 0)){
 			tipo = 'D';
 			button_ID = button;
 			status = '1';
 			send = 1;
-		}
+		} 
 		
 		if(xQueueReceive(xQueueKeyUp, &button, 0)){
 			tipo = 'D';
 			button_ID = button;
 			status = '0';
 			send = 1;
+		}
+		
+		// ANALOGIC
+		if(xQueueReceive(xQueuePot, &speed_state, 0)){
+			if(handshake == '1'){
+				send_package('A', speed_state , '0');
+			}
 		}
 		
 		// HANDSHAKE
