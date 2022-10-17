@@ -37,6 +37,12 @@
 #define BUTONOFF_IDX      26
 #define BUTONOFF_IDX_MASK (1 << BUTONOFF_IDX)
 
+// LED de Conexão (Liga/Desliga) PA24
+#define LED_PIO		PIOA
+#define LED_PIO_ID	ID_PIOA	
+#define LED_IDX     24
+#define LED_IDX_MASK (1 << LED_IDX)
+
 #define END_OF_PCK	  'X'
 #define WAIT_TIME	  100 / portTICK_PERIOD_MS	
 
@@ -122,7 +128,7 @@ void but1_callback(void)
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
-	if(pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
+	if(!pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
@@ -137,7 +143,7 @@ void but2_callback(void)
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
-	if(pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
+	if(!pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
 	}else{
 		// Borda de descida (Soltou):
@@ -168,6 +174,10 @@ static void AFEC_pot_Callback(void) {
 /* funcoes                                                              */
 /************************************************************************/
 
+void led_config(void){
+	pmc_enable_periph_clk(LED_PIO_ID);
+	pio_set_output(LED_PIO, LED_IDX_MASK, 0, 0, 0);
+}
 
 void buts_config(void){
 	
@@ -176,11 +186,10 @@ void buts_config(void){
 	pmc_enable_periph_clk(BUT1_PIO_ID);
 	pmc_enable_periph_clk(BUT2_PIO_ID);
 	
-	
 	// Inicializando botoes como entrada , configurando debounce
-	pio_configure(BUTONOFF_PIO, PIO_INPUT, BUTONOFF_IDX_MASK,  PIO_DEBOUNCE);
-	pio_configure(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK,  PIO_DEBOUNCE);
-	pio_configure(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK,  PIO_DEBOUNCE);
+	pio_configure(BUTONOFF_PIO, PIO_INPUT, BUTONOFF_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_configure(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_configure(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
 	
 	// Aplicando filtro debounce
 	pio_set_debounce_filter(BUTONOFF_PIO, BUTONOFF_IDX_MASK, 80);
@@ -201,7 +210,8 @@ void but_interrupt_config(Pio *p_pio , uint32_t pio_id, const uint32_t ul_mask ,
 }
 
 void io_init(void) {
-
+	
+	led_config();
 	buts_config();
 	
 	pio_handler_set(BUTONOFF_PIO,
@@ -382,6 +392,14 @@ void TC_init(Tc *TC, int ID_TC, int TC_CHANNEL, int freq) {
 }
 
 
+void connect_led(char handshake){	
+	if(handshake == '1'){
+		pio_set(LED_PIO,LED_IDX_MASK);
+	}else{
+		pio_clear(LED_PIO,LED_IDX_MASK);
+	}	
+}
+
 void send(char arg){
 	while(!usart_is_tx_ready(USART_COM)) {
 		vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -479,6 +497,7 @@ void task_main(void) {
 	char speed_state;
 	
 	int send = 0;
+	int firstTime = 1;
 
 	//                PROTOCOLO
 	// ----------------------------------------------
@@ -525,6 +544,7 @@ void task_main(void) {
 				handshake  = '1';
 			}
 			
+			connect_led(handshake);
 			send_package('H', '0', handshake);
 		}
 		
