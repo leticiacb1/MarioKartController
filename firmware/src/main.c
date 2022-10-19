@@ -197,6 +197,11 @@ void TC1_Handler(void) {
 
 	/* Selecina canal e inicializa conversão */
 	afec_channel_enable(AFEC_POT, AFEC_POT_CHANNEL);
+	
+	// Adicionei:
+	afec_channel_enable(AFEC_POT, AFECx_POT_CHANNEL);
+	afec_channel_enable(AFEC_POT, AFECy_POT_CHANNEL);
+	
 	afec_start_software_conversion(AFEC_POT);
 }
 
@@ -518,14 +523,14 @@ void task_joystick(void){
 	while(1){
 		if(xQueueReceive(xQueueAfecX , &(value) , 0)){
 			
-			if(value < 50){
+			if(value < 100){
 				
 				if(data.eixo_x != 'e'){
 					data.eixo_x = 'e';
 					send = 1;
 				}
 				
-				}else if (value > 4050){
+				}else if (value > 4000){
 				if(data.eixo_x != 'd'){
 					data.eixo_x = 'd';
 					send = 1;
@@ -539,14 +544,14 @@ void task_joystick(void){
 		}
 		
 		if(xQueueReceive(xQueueAfecY , &(value) , 0)){
-			if(value < 50){
+			if(value < 100){
 				
 				if(data.eixo_y != 'c'){
 					data.eixo_y = 'c';
 					send = 1;
 				}
 				
-				}else if (value > 4090){
+				}else if (value > 4000){
 				if(data.eixo_y != 'b'){
 					data.eixo_y = 'b';
 					send = 1;
