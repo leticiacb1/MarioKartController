@@ -53,4 +53,6 @@
 /* Configure UART pins */
 #define CONF_BOARD_UART_CONSOLE
 
+#define CONF_BOARD_TWIHS0
+
 #endif /* CONF_BOARD_H_INCLUDED */
