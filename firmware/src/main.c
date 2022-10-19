@@ -17,7 +17,7 @@
 // Acelera Ré PD30 AFEC
 #define AFEC_POT AFEC0
 #define AFEC_POT_ID ID_AFEC0
-#define AFEC_POT_CHANNEL 0 
+#define AFEC_POT_CHANNEL 0
 
 // Botão AZUL protoboard PA2
 #define BUT1_PIO      PIOA
@@ -39,24 +39,29 @@
 
 // LED de Conexão (Liga/Desliga) PA24
 #define LED_PIO		PIOA
-#define LED_PIO_ID	ID_PIOA	
+#define LED_PIO_ID	ID_PIOA
 #define LED_IDX     24
 #define LED_IDX_MASK (1 << LED_IDX)
 
-// --------------- JOYSTICK ---------------------- 
-// x do Joystick
+// --------------- JOYSTICK ----------------------
+// x do Joystick PB2
+#define AFECx_POT AFEC0
+#define AFECx_POT_ID ID_AFEC0
+#define AFECx_POT_CHANNEL 5
 
-
-// y do joystick 
+// y do joystick PB3
+#define AFECy_POT AFEC0
+#define AFECy_POT_ID ID_AFEC0
+#define AFECy_POT_CHANNEL 2
 
 // BOTAO PC31
-#define BUT_JOY_PIO    PIOC     
+#define BUT_JOY_PIO    PIOC
 #define BUT_JOY_PIO_ID ID_PIOC
 #define BUT_JOY_IDX    31
 #define BUT_JOY_IDX_MASK  (1 << BUT_JOY_IDX)
 
 #define END_OF_PCK	  'X'
-#define WAIT_TIME	  100 / portTICK_PERIOD_MS	
+#define WAIT_TIME	  100 / portTICK_PERIOD_MS
 
 typedef struct {
 	char eixo_x;
@@ -81,7 +86,7 @@ typedef struct {
 /* RTOS                                                                 */
 /************************************************************************/
 
-// Filas 
+// Filas
 QueueHandle_t xQueueKeyUp;
 QueueHandle_t xQueueKeyDown;
 QueueHandle_t xQueueAfec;
@@ -140,7 +145,7 @@ void but_joy_callback(void){
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	if(!pio_get(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
-	}else{
+		}else{
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
 	}
 }
@@ -161,14 +166,14 @@ void but1_callback(void)
 	// Borda subida (Apertou):
 	if(!pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
-	}else{
+		}else{
 		// Borda de descida (Soltou):
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
 	}
 }
 
 void but2_callback(void)
-{	
+{
 	char butId = 'B';
 	// Indica que o botão verde foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -176,7 +181,7 @@ void but2_callback(void)
 	// Borda subida (Apertou):
 	if(!pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
 		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
-	}else{
+		}else{
 		// Borda de descida (Soltou):
 		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
 	}
@@ -199,6 +204,24 @@ static void AFEC_pot_Callback(void) {
 	int value = afec_channel_get_value(AFEC_POT, AFEC_POT_CHANNEL);
 	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
 	xQueueSendFromISR(xQueueAfec, &value , &xHigherPriorityTaskWoken);
+	
+	// x - JOYSTICK
+	afec_channel_enable(AFECx_POT, AFECx_POT_CHANNEL);
+	afec_start_software_conversion(AFECx_POT);
+}
+
+static void AFEC_xJoy_Callback(void) {
+	int value = afec_channel_get_value(AFECx_POT, AFECx_POT_CHANNEL);
+	
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfecX, &value , &xHigherPriorityTaskWoken);
+}
+
+static void AFEC_yJoy_Callback (void){
+	int value = afec_channel_get_value(AFECy_POT, AFECy_POT_CHANNEL);
+	
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfecY, &value , &xHigherPriorityTaskWoken);
 }
 
 /************************************************************************/
@@ -259,22 +282,22 @@ void io_init(void) {
 	buts_config();
 	
 	pio_handler_set(BUTONOFF_PIO,
-					BUTONOFF_PIO_ID,
-					BUTONOFF_IDX_MASK,
-					PIO_IT_RISE_EDGE,
-					but_on_off_callback);
+	BUTONOFF_PIO_ID,
+	BUTONOFF_IDX_MASK,
+	PIO_IT_RISE_EDGE,
+	but_on_off_callback);
 	
 	pio_handler_set(BUT1_PIO,
-					BUT1_PIO_ID,
-					BUT1_IDX_MASK,
-					PIO_IT_EDGE,
-					but1_callback);
+	BUT1_PIO_ID,
+	BUT1_IDX_MASK,
+	PIO_IT_EDGE,
+	but1_callback);
 	
 	pio_handler_set(BUT2_PIO,
-					BUT2_PIO_ID,
-					BUT2_IDX_MASK,
-					PIO_IT_EDGE,
-					but2_callback);
+	BUT2_PIO_ID,
+	BUT2_IDX_MASK,
+	PIO_IT_EDGE,
+	but2_callback);
 	
 	
 	// Ativa interrupção nos botões:
@@ -374,74 +397,74 @@ int hc05_init(void) {
 	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000\n", 100);
 }
 
-static void config_AFEC_pot(Afec *afec, uint32_t afec_id, uint32_t afec_channel,
-                            afec_callback_t callback) {
-  /*************************************
-   * Ativa e configura AFEC
-   *************************************/
-  /* Ativa AFEC - 0 */
-  afec_enable(afec);
+static void config_AFEC_pot() {
+	/*************************************
+	* Ativa e configura AFEC
+	*************************************/
+	/* Ativa AFEC - 0 */
+	afec_enable(AFEC_POT);
 
-  /* struct de configuracao do AFEC */
-  struct afec_config afec_cfg;
+	/* struct de configuracao do AFEC */
+	struct afec_config afec_cfg;
 
-  /* Carrega parametros padrao */
-  afec_get_config_defaults(&afec_cfg);
+	/* Carrega parametros padrao */
+	afec_get_config_defaults(&afec_cfg);
 
-  /* Configura AFEC */
-  afec_init(afec, &afec_cfg);
+	/* Configura AFEC */
+	afec_init(AFEC_POT, &afec_cfg);
 
-  /* Configura trigger por software */
-  afec_set_trigger(afec, AFEC_TRIG_SW);
+	/* Configura trigger por software */
+	afec_set_trigger(AFEC_POT, AFEC_TRIG_SW);
 
-  /*** Configuracao específica do canal AFEC ***/
-  struct afec_ch_config afec_ch_cfg;
-  afec_ch_get_config_defaults(&afec_ch_cfg);
-  afec_ch_cfg.gain = AFEC_GAINVALUE_0;
-  afec_ch_set_config(afec, afec_channel, &afec_ch_cfg);
+	/*** Configuracao específica do canal AFEC ***/
+	struct afec_ch_config afec_ch_cfg;
+	afec_ch_get_config_defaults(&afec_ch_cfg);
+	afec_ch_cfg.gain = AFEC_GAINVALUE_0;
+	afec_ch_set_config(AFEC_POT, AFEC_POT_CHANNEL, &afec_ch_cfg);
+	afec_ch_set_config(AFECx_POT, AFECx_POT_CHANNEL, &afec_ch_cfg);
+	afec_ch_set_config(AFECy_POT, AFECy_POT_CHANNEL, &afec_ch_cfg);
+	
+	/*
+	* Calibracao:
+	* Because the internal ADC offset is 0x200, it should cancel it and shift
+	down to 0.
+	*/
+	afec_channel_set_analog_offset(AFEC_POT, AFEC_POT_CHANNEL, 0x200);
+	afec_channel_set_analog_offset(AFECx_POT, AFECx_POT_CHANNEL, 0x200);
+	afec_channel_set_analog_offset(AFECy_POT, AFECy_POT_CHANNEL, 0x200);
 
-  /*
-  * Calibracao:
-  * Because the internal ADC offset is 0x200, it should cancel it and shift
-  down to 0.
-  */
-  afec_channel_set_analog_offset(afec, afec_channel, 0x200);
+	/* configura IRQ */
+	afec_set_callback(AFEC_POT, AFEC_POT_CHANNEL, AFEC_pot_Callback, 1);
+	afec_set_callback(AFECx_POT, AFECx_POT_CHANNEL, AFEC_xJoy_Callback, 1);
+	afec_set_callback(AFECy_POT, AFECy_POT_CHANNEL, AFEC_yJoy_Callback, 1);
 
-  /***  Configura sensor de temperatura ***/
-  struct afec_temp_sensor_config afec_temp_sensor_cfg;
-
-  afec_temp_sensor_get_config_defaults(&afec_temp_sensor_cfg);
-  afec_temp_sensor_set_config(afec, &afec_temp_sensor_cfg);
-
-  /* configura IRQ */
-  afec_set_callback(afec, afec_channel, callback, 1);
-  NVIC_SetPriority(afec_id, 4);
-  NVIC_EnableIRQ(afec_id);
+	NVIC_SetPriority(ID_AFEC0, 4);
+	NVIC_EnableIRQ(ID_AFEC0);
 }
 
 void TC_init(Tc *TC, int ID_TC, int TC_CHANNEL, int freq) {
-  uint32_t ul_div;
-  uint32_t ul_tcclks;
-  uint32_t ul_sysclk = sysclk_get_cpu_hz();
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
 
-  pmc_enable_periph_clk(ID_TC);
+	pmc_enable_periph_clk(ID_TC);
 
-  tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
-  tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
-  tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
 
-  NVIC_SetPriority((IRQn_Type)ID_TC, 4);
-  NVIC_EnableIRQ((IRQn_Type)ID_TC);
-  tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+	NVIC_SetPriority((IRQn_Type)ID_TC, 4);
+	NVIC_EnableIRQ((IRQn_Type)ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
 }
 
 
-void connect_led(char handshake){	
+void connect_led(char handshake){
 	if(handshake == '1'){
 		pio_set(LED_PIO,LED_IDX_MASK);
-	}else{
+		}else{
 		pio_clear(LED_PIO,LED_IDX_MASK);
-	}	
+	}
 }
 
 void send(char arg){
@@ -452,10 +475,10 @@ void send(char arg){
 }
 
 void send_package(char tipo, char id , char status ){
-		
+	
 	// Envia tipo:
-	send(tipo);	
-		
+	send(tipo);
+	
 	// Envia id do botão:
 	send(id);
 	
@@ -473,10 +496,74 @@ void send_package(char tipo, char id , char status ){
 
 void task_joystick(void){
 
-	printf("\n Task joystick\n");
+	printf("\nTask joystick\n");
+	
 	but_vjoy_config();
 	
+	// Variaveis
+	uint32_t send;
+	uint32_t value;
+	
+	// Inicializa dados
+	joyData data;
+	data.eixo_x = '0';
+	data.eixo_y  = '0';
+	
+	// 'd' -> seta para direita
+	// 'e' -> seta para esquerda
+	// 'c' -> seta para cima
+	// 'b' -> seta para baixo
+	// '0' -> Não mexeu
+	
 	while(1){
+		if(xQueueReceive(xQueueAfecX , &(value) , 0)){
+			
+			if(value < 50){
+				
+				if(data.eixo_x != 'e'){
+					data.eixo_x = 'e';
+					send = 1;
+				}
+				
+				}else if (value > 4050){
+				if(data.eixo_x != 'd'){
+					data.eixo_x = 'd';
+					send = 1;
+				}
+				}else{
+				if(data.eixo_x != '0'){
+					data.eixo_x = '0';
+					send = 1;
+				}
+			}
+		}
+		
+		if(xQueueReceive(xQueueAfecY , &(value) , 0)){
+			if(value < 50){
+				
+				if(data.eixo_y != 'c'){
+					data.eixo_y = 'c';
+					send = 1;
+				}
+				
+				}else if (value > 4090){
+				if(data.eixo_y != 'b'){
+					data.eixo_y = 'b';
+					send = 1;
+				}
+				}else{
+				if(data.eixo_y != '0'){
+					data.eixo_y = '0';
+					send = 1;
+				}
+			}
+		}
+		
+		if(send){
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xQueueSend(xQueueJoy, &data,  &xHigherPriorityTaskWoken);
+			send = 0;
+		}
 		
 	}
 }
@@ -485,7 +572,8 @@ void task_potenciometro(void){
 	printf("Task potenciometro started \n");
 	
 	// configura ADC e TC para controlar a leitura
-	config_AFEC_pot(AFEC_POT, AFEC_POT_ID, AFEC_POT_CHANNEL, AFEC_pot_Callback);
+	config_AFEC_pot();
+	
 	TC_init(TC0, ID_TC1, 1, 10);
 	tc_start(TC0, 1);
 	
@@ -507,18 +595,18 @@ void task_potenciometro(void){
 					state = 'a';
 				}
 				
-			}else if( log10(value) < 2.5){
+				}else if( log10(value) < 2.5){
 				
 				if(state != 'd'){
 					send = 1;
 					state = 'd';
 				}
 				
-			}else {
+				}else {
 				if(state != 's'){
 					send = 1;
 					state = 's';
-				}	
+				}
 			}
 			
 		}
@@ -547,6 +635,7 @@ void task_main(void) {
 	char button;
 	char button_ID;
 	char status;
+	joyData datajoy;
 	
 	char handshake = '0';
 	char speed_state;
@@ -561,10 +650,16 @@ void task_main(void) {
 	// status botão -> '1' pressionado  '0' soltou
 	
 	//                HANDSHAKE
-	// --------------------------------------------- 
+	// ---------------------------------------------
 	// tipo = 'H'
 	// id_botao = '0'
 	// status = '0' (antes ligado) '1' (antes desigado)
+	
+	//                VJOY DATA
+	// ---------------------------------------------
+	// tipo = 'J'
+	// id_botao = info eixo x
+	// status = info eixo y
 	
 	while(1) {
 		
@@ -574,7 +669,7 @@ void task_main(void) {
 			button_ID = button;
 			status = '1';
 			send = 1;
-		} 
+		}
 		
 		if(xQueueReceive(xQueueKeyUp, &button, 0)){
 			tipo = 'D';
@@ -587,6 +682,13 @@ void task_main(void) {
 		if(xQueueReceive(xQueuePot, &speed_state, 0)){
 			if(handshake == '1'){
 				send_package('A', speed_state , '0');
+			}
+		}
+		
+		// JOYSTICK
+		if(xQueueReceive(xQueueJoy, &datajoy , 0)){
+			if(handshake == '1'){
+				send_package('J', datajoy.eixo_x, datajoy.eixo_y);
 			}
 		}
 		
@@ -607,12 +709,12 @@ void task_main(void) {
 			send = 0;
 		}
 		
-		// Envio de dados	
+		// Envio de dados
 		if(send && handshake){
 			// Envia pacote:
 			send_package(tipo, button_ID, status);
 			// Variável de envio
-			send = 0;	
+			send = 0;
 		}
 
 	}
@@ -638,7 +740,7 @@ int main(void) {
 	xSemaphoreOnOff = xSemaphoreCreateBinary();
 	
 	if (xSemaphoreOnOff == NULL)
-		printf("falha em criar semáforo \n");
+	printf("falha em criar semáforo \n");
 	
 	// Cria fila
 	xQueueKeyUp = xQueueCreate(100, sizeof(char));
@@ -651,7 +753,7 @@ int main(void) {
 	xQueueJoy = xQueueCreate(100, sizeof(joyData));
 	
 	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL || xQueueAfecX == NULL || xQueueAfecY == NULL || xQueueJoy == NULL)
-		printf("falha em criar fila \n");
+	printf("falha em criar fila \n");
 
 	// Start the scheduler.
 	vTaskStartScheduler();
