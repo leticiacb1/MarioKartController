@@ -43,8 +43,25 @@
 #define LED_IDX     24
 #define LED_IDX_MASK (1 << LED_IDX)
 
+// --------------- JOYSTICK ---------------------- 
+// x do Joystick
+
+
+// y do joystick 
+
+// BOTAO PC31
+#define BUT_JOY_PIO    PIOC     
+#define BUT_JOY_PIO_ID ID_PIOC
+#define BUT_JOY_IDX    31
+#define BUT_JOY_IDX_MASK  (1 << BUT_JOY_IDX)
+
 #define END_OF_PCK	  'X'
 #define WAIT_TIME	  100 / portTICK_PERIOD_MS	
+
+typedef struct {
+	char eixo_x;
+	char eixo_y;
+} joyData;
 
 // usart (bluetooth ou serial)
 // Descomente para enviar dados
@@ -70,7 +87,11 @@ QueueHandle_t xQueueKeyDown;
 QueueHandle_t xQueueAfec;
 QueueHandle_t xQueuePot;
 
-// Semaforosx
+QueueHandle_t xQueueAfecX;
+QueueHandle_t xQueueAfecY;
+QueueHandle_t xQueueJoy;
+
+// Semaforos
 SemaphoreHandle_t xSemaphoreOnOff;
 
 #define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
@@ -113,6 +134,16 @@ extern void vApplicationMallocFailedHook(void) {
 /************************************************************************/
 /* handlers / callbacks                                                 */
 /************************************************************************/
+
+void but_joy_callback(void){
+	char butId = 'Y';
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	if(!pio_get(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK)){
+		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+	}else{
+		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+	}
+}
 
 void but_on_off_callback(void){
 	// Indica que o botão onoff foi pressionado:
@@ -207,6 +238,19 @@ void but_interrupt_config(Pio *p_pio , uint32_t pio_id, const uint32_t ul_mask ,
 	// Configura NVIC para receber interrupcoes do PIO dos botões com mesma prioridade.
 	NVIC_EnableIRQ(pio_id);
 	NVIC_SetPriority(pio_id, priority);
+}
+
+void but_vjoy_config(void){
+	pmc_enable_periph_clk(BUT_JOY_PIO_ID);
+	pio_configure(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_set_debounce_filter(BUT_JOY_PIO, BUT_JOY_IDX_MASK, 80);
+	
+	pio_handler_set(BUT_JOY_PIO,
+	BUT_JOY_PIO_ID,
+	BUT_JOY_IDX_MASK,
+	PIO_IT_EDGE,
+	but_joy_callback);
+	but_interrupt_config(BUT_JOY_PIO, BUT_JOY_PIO_ID, BUT_JOY_IDX_MASK, 4);
 }
 
 void io_init(void) {
@@ -426,6 +470,17 @@ void send_package(char tipo, char id , char status ){
 /* TASKS                                                                */
 /************************************************************************/
 
+
+void task_joystick(void){
+
+	printf("\n Task joystick\n");
+	but_vjoy_config();
+	
+	while(1){
+		
+	}
+}
+
 void task_potenciometro(void){
 	printf("Task potenciometro started \n");
 	
@@ -577,6 +632,7 @@ int main(void) {
 	// Cria task
 	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
 	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
 	
 	// Cria semáforos para verificar quao botão foi apertado:
 	xSemaphoreOnOff = xSemaphoreCreateBinary();
@@ -590,7 +646,11 @@ int main(void) {
 	xQueueAfec = xQueueCreate(100, sizeof(uint32_t));
 	xQueuePot = xQueueCreate(100, sizeof(char));
 	
-	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL )
+	xQueueAfecX = xQueueCreate(100, sizeof(uint32_t));
+	xQueueAfecY = xQueueCreate(100, sizeof(uint32_t));
+	xQueueJoy = xQueueCreate(100, sizeof(joyData));
+	
+	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL || xQueueAfecX == NULL || xQueueAfecY == NULL || xQueueJoy == NULL)
 		printf("falha em criar fila \n");
 
 	// Start the scheduler.
