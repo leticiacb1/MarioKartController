@@ -6,7 +6,7 @@ import pyvjoy # Windows apenas
 
 class MyControllerMap:
     def __init__(self):
-        self.button = {'A': 1 , 'B' : 2 , 'X': 3 , 'Z': 4}
+        self.button = {'A': 1 , 'B' : 2 , 'ENTERandX': 3 , 'Z': 4 ,'LEFT': 6 , 'RIGHT': 7 , 'UP': 8 , 'DOWN': 9}
 
 class SerialControllerInterface:
 
@@ -21,6 +21,12 @@ class SerialControllerInterface:
 	# // tipo = 'H'
 	# // id_botao = '0'
 	# // status = '0' (pedido para desligar conexao) , status = '1' pedido para ligar conexao
+
+    # //                VJOY DATA
+	# // ---------------------------------------------
+	# // tipo = 'J'
+	# // id_botao = info eixo x
+	# // status = info eixo y
 
     def __init__(self, port, baudrate):
         self.ser = serial.Serial(port, baudrate=baudrate)
@@ -48,13 +54,13 @@ class SerialControllerInterface:
     def input_analog_action(self,speed_state):
         if(speed_state == 'a'):
             logging.info("\nAcelera\n")
-            self.j.set_button(self.mapping.button['X'], 1)  
+            self.j.set_button(self.mapping.button['ENTERandX'], 1)  
         elif(speed_state == 'd'):
             logging.info("\nRe\n")
             self.j.set_button(self.mapping.button['Z'], 1)
         else:
             logging.info("Para")
-            self.j.set_button(self.mapping.button['X'], 0)
+            self.j.set_button(self.mapping.button['ENTERandX'], 0)
             self.j.set_button(self.mapping.button['Z'], 0)
 
     def input_digital_action(self,buttonId, status):
@@ -67,6 +73,27 @@ class SerialControllerInterface:
         else:    
             logging.info("- KeyUp \n")
             self.j.set_button(self.mapping.button[buttonId], 0)  
+
+    def input_vjoy_values(self, x , y):
+        logging.info("\nJOYSTICK\n")
+        logging.info(x)
+        logging.info(y)
+        print('\n')
+        if x == b'0':
+            self.j.set_button(self.mapping.button['LEFT'], 0)  
+            self.j.set_button(self.mapping.button['RIGHT'], 0) 
+        if y == b'0':
+            self.j.set_button(self.mapping.button['UP'], 0)              
+            self.j.set_button(self.mapping.button['DOWN'], 0)  
+            
+        if x == b'e':
+            self.j.set_button(self.mapping.button['LEFT'], 1)   
+        if x == b'd':
+            self.j.set_button(self.mapping.button['RIGHT'], 1)   
+        if y== b'c':
+            self.j.set_button(self.mapping.button['UP'], 1) 
+        if y== b'b':
+            self.j.set_button(self.mapping.button['DOWN'], 1) 
 
     def update(self):
 
@@ -85,22 +112,26 @@ class SerialControllerInterface:
 
         # Digital value
         if data_type == b'D':
-            
             if(id_state == b'A'):
                 self.input_digital_action('A', status)
             if(id_state == b'B'):
                 self.input_digital_action('B', status)
-        print(data_type)
+            if(id_state == b'Y'):
+                self.input_digital_action('ENTERandX', status)
 
         # Analogic value
         if data_type == b'A':
-            print(id_state)
             if(id_state == b'a'):
                 self.input_analog_action('a')
             elif(id_state == b'd'):
                 self.input_analog_action('d')
             elif(id_state == b's'):
                 self.input_analog_action('s')
+
+        # Joystick
+        if data_type == b'J':
+            #                       eixo_x    eixo_y
+             self.input_vjoy_values(id_state, status)
                 
         self.incoming = self.ser.read()
 
