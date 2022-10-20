@@ -792,14 +792,14 @@ void task_joystick(void){
 	while(1){
 		if(xQueueReceive(xQueueAfecX , &(value) , 0)){
 			
-			if(value < 100){
-				
+			if(log10(value) < 2.5){
+				//printf("%d",value);
 				if(data.eixo_x != 'e'){
 					data.eixo_x = 'e';
 					send = 1;
 				}
 				
-				}else if (value > 4000){
+				}else if (log10(value) > 3.5){
 				if(data.eixo_x != 'd'){
 					data.eixo_x = 'd';
 					send = 1;
@@ -812,15 +812,16 @@ void task_joystick(void){
 			}
 		}
 		
+		
 		if(xQueueReceive(xQueueAfecY , &(value) , 0)){
-			if(value < 100){
+			if(log10(value) < 2.5){
 				
 				if(data.eixo_y != 'c'){
 					data.eixo_y = 'c';
 					send = 1;
 				}
 				
-				}else if (value > 4000){
+				}else if (log10(value) > 3.5){
 				if(data.eixo_y != 'b'){
 					data.eixo_y = 'b';
 					send = 1;
@@ -832,6 +833,7 @@ void task_joystick(void){
 				}
 			}
 		}
+		
 		
 		if(send){
 			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -940,6 +942,7 @@ void task_main(void) {
 		
 		// DIGITAL
 		if(xQueueReceive(xQueueKeyDown, &button, 0)){
+			printf("ENTREI");
 			tipo = 'D';
 			button_ID = button;
 			status = '1';
@@ -1014,12 +1017,6 @@ int main(void) {
 	board_init();
 	configure_console();
 
-	// Cria task
-	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
-	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
-	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
-	xTaskCreate(task_imu,"IMU", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
-	
 	// Cria semáforos para verificar quao botão foi apertado:
 	xSemaphoreOnOff = xSemaphoreCreateBinary();
 	
@@ -1036,6 +1033,14 @@ int main(void) {
 	xQueueAfecY = xQueueCreate(100, sizeof(uint32_t));
 	xQueueJoy = xQueueCreate(100, sizeof(joyData));
 	xQueueIMU = xQueueCreate(100, sizeof(char));
+	
+	
+	// Cria task
+	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
+	xTaskCreate(task_imu,"IMU", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	
 	
 	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL || xQueueAfecX == NULL || xQueueAfecY == NULL || xQueueJoy == NULL || xQueueIMU == NULL)
 	printf("falha em criar fila \n");
