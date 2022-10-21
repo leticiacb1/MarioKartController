@@ -66,6 +66,17 @@
 #define END_OF_PCK	  'X'
 #define WAIT_TIME	  100 / portTICK_PERIOD_MS
 
+#define DIGITAL 'D'
+#define ANALOGICO 'A' 
+#define IMU 'I'
+#define JOYSTICK 'J'
+
+typedef struct {
+	volatile char h0;  // Tipo
+	volatile char h1;  
+	volatile char h2;
+} data;
+
 typedef struct {
 	char eixo_x;
 	char eixo_y;
@@ -103,15 +114,11 @@ float proc_gyr_x, proc_gyr_y, proc_gyr_z;
 /************************************************************************/
 
 // Filas
-QueueHandle_t xQueueKeyUp;
-QueueHandle_t xQueueKeyDown;
-QueueHandle_t xQueueAfec;
-QueueHandle_t xQueuePot;
-QueueHandle_t xQueueIMU;
+QueueHandle_t xQueueMain;
 
+QueueHandle_t xQueueAfec;
 QueueHandle_t xQueueAfecX;
 QueueHandle_t xQueueAfecY;
-QueueHandle_t xQueueJoy;
 
 // Semaforos
 SemaphoreHandle_t xSemaphoreOnOff;
@@ -160,13 +167,22 @@ extern void vApplicationMallocFailedHook(void) {
 /************************************************************************/
 
 void but_joy_callback(void){
+	
+	data dado;
 	char butId = 'Y';
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	if(!pio_get(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK)){
-		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '1';
 		}else{
-		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '0';
 	}
+	
+	xQueueSendFromISR(xQueueMain, &dado, &xHigherPriorityTaskWoken);
+	
 }
 
 void but_on_off_callback(void){
@@ -177,33 +193,45 @@ void but_on_off_callback(void){
 
 void but1_callback(void)
 {
-	
+	data dado;
 	char butId = 'A';
-	// Indica que o botão azul foi pressionado:
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(!pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
-		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '1';
 		}else{
 		// Borda de descida (Soltou):
-		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '0';
 	}
+	
+	xQueueSendFromISR(xQueueMain, &dado , &xHigherPriorityTaskWoken);
 }
 
 void but2_callback(void)
 {
+	data dado;
 	char butId = 'B';
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
 	// Indica que o botão verde foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	
 	// Borda subida (Apertou):
 	if(!pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
-		xQueueSendFromISR(xQueueKeyDown, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '1';
 		}else{
 		// Borda de descida (Soltou):
-		xQueueSendFromISR(xQueueKeyUp, &butId , &xHigherPriorityTaskWoken);
+		dado.h2 = '0';
 	}
+	
+	xQueueSendFromISR(xQueueMain, &dado , &xHigherPriorityTaskWoken);
 }
 
 void TC1_Handler(void) {
@@ -657,6 +685,11 @@ void task_imu(void){
 	RTT_init(1000, 0, 0);
 	int tick_old = 0;
 	
+	data dado;
+	dado.h0 = 'I';
+	dado.h1 = '0';
+	dado.h2 = '0';
+	
 	// Variável de estado , envio de dados apenas se houver mudança de estado:
 	uint32_t send = 0;
 	char state;
@@ -728,39 +761,32 @@ void task_imu(void){
 
 		// dados em pitch roll e yaw
 		const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
-		
-		// 		printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw);
-		// 		printf("Roll: %f\n", euler.angle.roll);
-		//
-		
+				
 		if( euler.angle.roll > 30){
 			
-			if(state != 'r'){
-				//printf("Direita!\n");
+			if(dado.h1 != 'r'){
 				send = 1;
-				state = 'r';
+				dado.h1 = 'r';
 			}
 			
 			}else if(euler.angle.roll < -30){
 			
-			if(state != 'l'){
-				//printf("Esquerda!\n");
+			if(dado.h1 != 'l'){
 				send = 1;
-				state = 'l';
+				dado.h1 = 'l';
 			}
 			
 			}else {
-			if(state != 's'){
-				//printf("Horizontal!\n");
+			if(dado.h1 != 's'){
 				send = 1;
-				state = 's';
+				dado.h1 = 's';
 			}
 		}
 		
 
 		if(send){
 			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-			xQueueSend(xQueueIMU, &state,  &xHigherPriorityTaskWoken);
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
 			send = 0;
 		}
 		
@@ -779,10 +805,13 @@ void task_joystick(void){
 	uint32_t value;
 	
 	// Inicializa dados
-	joyData data;
-	data.eixo_x = '0';
-	data.eixo_y  = '0';
+	joyData dataJ;
 	
+	data dado;
+	dado.h0 = 'J';
+	dado.h1 = '0';
+	dado.h2 = '0';
+		
 	// 'd' -> seta para direita
 	// 'e' -> seta para esquerda
 	// 'c' -> seta para cima
@@ -793,20 +822,19 @@ void task_joystick(void){
 		if(xQueueReceive(xQueueAfecX , &(value) , 0)){
 			
 			if(log10(value) < 2.5){
-				//printf("%d",value);
-				if(data.eixo_x != 'e'){
-					data.eixo_x = 'e';
+				if(dado.h1 != 'e'){
+					dado.h1 = 'e';
 					send = 1;
 				}
 				
 				}else if (log10(value) > 3.5){
-				if(data.eixo_x != 'd'){
-					data.eixo_x = 'd';
+				if(dado.h1 != 'd'){
+					dado.h1 = 'd';
 					send = 1;
 				}
 				}else{
-				if(data.eixo_x != '0'){
-					data.eixo_x = '0';
+				if(dado.h1 != '0'){
+					dado.h1 = '0';
 					send = 1;
 				}
 			}
@@ -816,19 +844,19 @@ void task_joystick(void){
 		if(xQueueReceive(xQueueAfecY , &(value) , 0)){
 			if(log10(value) < 2.5){
 				
-				if(data.eixo_y != 'c'){
-					data.eixo_y = 'c';
+				if(dado.h2 != 'c'){
+					dado.h2 = 'c';
 					send = 1;
 				}
 				
 				}else if (log10(value) > 3.5){
-				if(data.eixo_y != 'b'){
-					data.eixo_y = 'b';
+				if(dado.h2  != 'b'){
+					dado.h2= 'b';
 					send = 1;
 				}
 				}else{
-				if(data.eixo_y != '0'){
-					data.eixo_y = '0';
+				if(dado.h2  != '0'){
+					dado.h2 = '0';
 					send = 1;
 				}
 			}
@@ -837,7 +865,7 @@ void task_joystick(void){
 		
 		if(send){
 			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-			xQueueSend(xQueueJoy, &data,  &xHigherPriorityTaskWoken);
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
 			send = 0;
 		}
 		
@@ -854,6 +882,9 @@ void task_potenciometro(void){
 	tc_start(TC0, 1);
 	
 	int value;
+	data dado;
+	dado.h0 = 'A';
+	dado.h2 = '0';
 	
 	// Variável de estado , envio de dados apenas se houver mudança de estado:
 	uint32_t send = 0;
@@ -866,22 +897,22 @@ void task_potenciometro(void){
 		if (xQueueReceive(xQueueAfec, &(value), 80)) {
 			
 			if( log10(value) > 3.5){
-				if(state != 'a'){
+				if(dado.h1 != 'a'){
 					send = 1;
-					state = 'a';
+					dado.h1 = 'a';
 				}
 				
 				}else if( log10(value) < 2.5){
 				
-				if(state != 'd'){
+				if(dado.h1 != 'd'){
 					send = 1;
-					state = 'd';
+					dado.h1 = 'd';
 				}
 				
 				}else {
-				if(state != 's'){
+				if(dado.h1 != 's'){
 					send = 1;
-					state = 's';
+					dado.h1 = 's';
 				}
 			}
 			
@@ -889,12 +920,19 @@ void task_potenciometro(void){
 		
 		if(send){
 			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-			xQueueSend(xQueuePot, &state,  &xHigherPriorityTaskWoken);
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
 			send = 0;
 		}
 		
 	}
 	
+}
+
+void task_uart(void){
+	printf("Task Uart");
+	while(1){
+		
+	}
 }
 
 void task_main(void) {
@@ -912,6 +950,7 @@ void task_main(void) {
 	char button_ID;
 	char status;
 	joyData datajoy;
+	data dado;
 	
 	char handshake = '0';
 	char speed_state;
@@ -940,44 +979,13 @@ void task_main(void) {
 	
 	while(1) {
 		
-		// DIGITAL
-		if(xQueueReceive(xQueueKeyDown, &button, 0)){
-			printf("ENTREI");
-			tipo = 'D';
-			button_ID = button;
-			status = '1';
-			send = 1;
+		// MAIN
+		if(xQueueReceive(xQueueMain , &dado, 0)){
+			printf("\n%c\n", dado.h0);
+			printf("%c\n", dado.h1);
+			printf("%c\n", dado.h2);
 		}
-		
-		if(xQueueReceive(xQueueKeyUp, &button, 0)){
-			tipo = 'D';
-			button_ID = button;
-			status = '0';
-			send = 1;
-		}
-		
-		// ANALOGIC
-		if(xQueueReceive(xQueuePot, &speed_state, 0)){
-			if(handshake == '1'){
-				send_package('A', speed_state , '0');
-			}
-		}
-		
-		// JOYSTICK
-		if(xQueueReceive(xQueueJoy, &datajoy , 0)){
-			if(handshake == '1'){
-				send_package('J', datajoy.eixo_x, datajoy.eixo_y);
-			}
-		}
-		
-		//IMU
-		if(xQueueReceive(xQueueIMU, &rotation_state, 0)){
-			if(handshake == '1'){
-				send_package('I', rotation_state , '0');
-				//printf("Enviei rotação\n");
-			}
-		}	
-		
+								
 		// HANDSHAKE
 		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
 			
@@ -1024,25 +1032,19 @@ int main(void) {
 	printf("falha em criar semáforo \n");
 	
 	// Cria fila
-	xQueueKeyUp = xQueueCreate(100, sizeof(char));
-	xQueueKeyDown = xQueueCreate(100, sizeof(char));
 	xQueueAfec = xQueueCreate(100, sizeof(uint32_t));
-	xQueuePot = xQueueCreate(100, sizeof(char));
-	
 	xQueueAfecX = xQueueCreate(100, sizeof(uint32_t));
 	xQueueAfecY = xQueueCreate(100, sizeof(uint32_t));
-	xQueueJoy = xQueueCreate(100, sizeof(joyData));
-	xQueueIMU = xQueueCreate(100, sizeof(char));
-	
+	xQueueMain = xQueueCreate(100, sizeof(data));
 	
 	// Cria task
 	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
 	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
 	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
 	xTaskCreate(task_imu,"IMU", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_uart,"Uart", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
 	
-	
-	if (xQueueKeyUp == NULL || xQueueKeyDown == NULL || xQueueAfec == NULL || xQueuePot == NULL || xQueueAfecX == NULL || xQueueAfecY == NULL || xQueueJoy == NULL || xQueueIMU == NULL)
+	if (xQueueMain == NULL || xQueueAfec == NULL ||  xQueueAfecX == NULL || xQueueAfecY == NULL)
 	printf("falha em criar fila \n");
 
 	// Start the scheduler.
