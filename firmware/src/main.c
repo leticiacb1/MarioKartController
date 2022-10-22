@@ -100,8 +100,8 @@ typedef struct {
 /* VAR globais                                                          */
 /************************************************************************/
 
-char handshake = '0';
-char handshake_check = '0';
+char handshake;
+char handshake_check = 0;
 
 // ----------------------------------------------------------------------
 
@@ -940,27 +940,38 @@ void task_handshake(void){
 	
 	data dado;
 	int send = 0;
+	char recive;
 	
 	while(1){
 		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
 			if(handshake == '1'){
 				handshake= '0';
-				}else{
+				handshake_check = '0';
+			}else{
 				handshake  = '1';
 			}
 			
 			dado.h0 = 'H';
 			dado.h1 = '0';
 			dado.h2 = handshake;
-			
-			connect_led(dado.h2);		
+		
 			send = 1;
 		}
 		
 		if(send){
+			printf("Envia pedido de ligar/desligar! \n");
 			send_package(dado.h0, dado.h1, dado.h2);
 			send = 0;
 		}
+		
+		if(usart_read(USART_COM, &recive)){
+			if(recive == 0x43){
+				printf("Recebi ack! \n");
+				handshake_check = 1;
+				connect_led(1);
+			}	
+		}
+		
 	}
 }
 
@@ -996,14 +1007,19 @@ void task_main(void) {
 	
 	while(1) {
 		
+		// Entra em sleep mode.
+		if(handshake == '0' && handshake_check){
+			printf("Desligando ... \n");
+			handshake_check = 0;
+			connect_led(0);
+			xQueueReset(xQueueMain);
+			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
+		}
+		
 		// MAIN
 		if(xQueueReceive(xQueueMain , &dado, 0)){
 						
-			printf("\n%c\n", dado.h0);
-			printf("%c\n", dado.h1);
-			printf("%c\n", dado.h2);
-			
-			if(handshake == '1'){
+			if(handshake_check){
 				send_package(dado.h0, dado.h1, dado.h2);	
 			}
 			

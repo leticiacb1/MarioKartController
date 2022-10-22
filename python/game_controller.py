@@ -33,7 +33,6 @@ class SerialControllerInterface:
         self.mapping = MyControllerMap()
         self.j = pyvjoy.VJoyDevice(1)
         self.incoming = '0'
-
         self.connected = False
 
     def handshake(self):
@@ -41,14 +40,15 @@ class SerialControllerInterface:
         while self.incoming != b'X':
             self.incoming = self.ser.read()
             logging.info(self.incoming)
-        logging.info("----------------------")
-        
-        data_type = self.ser.read()
-        data_dummy = self.ser.read()
-        data_status = self.ser.read()
+     
+        h0 = self.ser.read()
+        h1 = self.ser.read()
+        h2 = self.ser.read()
 
-        if (data_type == b'H'):    
-            logging.info("-- HANDSHAKE CONNECTED--")
+        if (h0 == b'H'):    
+            logging.info("\n-- HANDSHAKE CONNECTED--\n")
+            self.ser.write('R'.encode(encoding = 'ascii'))
+            logging.info("\n-- SEND ACK --\n")
             self.connected  =True
 
     def input_analog_action(self,speed_state):
@@ -75,7 +75,7 @@ class SerialControllerInterface:
             self.j.set_button(self.mapping.button[buttonId], 0)  
 
     def input_vjoy_values(self, x , y):
-        logging.info("\nJOYSTICK\n")
+        logging.info("\n ---- JOYSTICK ---- \n")
         logging.info(x)
         logging.info(y)
         print('\n')
@@ -96,10 +96,7 @@ class SerialControllerInterface:
             self.j.set_button(self.mapping.button['DOWN'], 1) 
 
     def input_imu_action(self,speed_state):
-        print("------\n")
-        print('\n >> IMU\n')
-        print(speed_state);
-        print("------\n")
+        print("\n ---- IMU ----\n")
         if(speed_state == 'r'):
             logging.info("\nRight\n")
             self.j.set_button(self.mapping.button['RIGHT'], 1)  
@@ -117,47 +114,45 @@ class SerialControllerInterface:
         while self.incoming != b'X':
             self.incoming = self.ser.read()
 
-        data_type = self.ser.read()
-        id_state = self.ser.read()
-        status = self.ser.read()
+        h0 = self.ser.read()
+        h1 = self.ser.read()
+        h2 = self.ser.read()
         
         # Pedido de desconexao:
-        if(data_type == b'H' and status == b'0'):
+        if(h0 == b'H' and h2 == b'0'):
                 logging.info("--- DESCONNECTED ---")
                 self.connected = False
 
         # Digital value
-        if data_type == b'D':
-            if(id_state == b'A'):
-                self.input_digital_action('A', status)
-            if(id_state == b'B'):
-                self.input_digital_action('B', status)
-            if(id_state == b'Y'):
-                self.input_digital_action('ENTERandX', status)
+        if h0 == b'D':
+            if(h1 == b'A'):
+                self.input_digital_action('A', h2)
+            if(h1 == b'B'):
+                self.input_digital_action('B', h2)
+            if(h1 == b'Y'):
+                self.input_digital_action('ENTERandX', h2)
 
         # Analogic value
-        if data_type == b'A':
-            if(id_state == b'a'):
+        if h0 == b'A':
+            if(h1 == b'a'):
                 self.input_analog_action('a')
-            elif(id_state == b'd'):
+            elif(h1 == b'd'):
                 self.input_analog_action('d')
-            elif(id_state == b's'):
+            elif(h1 == b's'):
                 self.input_analog_action('s')
 
         # Joystick
-        if data_type == b'J':
-            #                       eixo_x    eixo_y
-             self.input_vjoy_values(id_state, status)
+        if h0 == b'J':
+            #                 eixo_x    eixo_y
+             self.input_vjoy_values(h1, h2)
 
         # IMU value
-        if data_type == b'I':
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            print(id_state)
-            if(id_state == b'r'):
+        if h0 == b'I':
+            if(h1 == b'r'):
                 self.input_imu_action('r')
-            elif(id_state == b'l'):
+            elif(h1 == b'l'):
                 self.input_imu_action('l')
-            elif(id_state == b's'):
+            elif(h1 == b's'):
                 self.input_imu_action('s')
                 
         self.incoming = self.ser.read()
@@ -195,8 +190,6 @@ if __name__ == '__main__':
     while True:
         
         if(controller.connected):
-            print("ESPERA update")
             controller.update()
         else:
-            print("ESPERA HANDSHAKE")
             controller.handshake()
