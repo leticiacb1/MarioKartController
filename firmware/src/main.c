@@ -99,6 +99,12 @@ typedef struct {
 /************************************************************************/
 /* VAR globais                                                          */
 /************************************************************************/
+
+char handshake = '0';
+char handshake_check = '0';
+
+// ----------------------------------------------------------------------
+
 int16_t  raw_acc_x, raw_acc_y, raw_acc_z;
 volatile uint8_t  raw_acc_xHigh, raw_acc_yHigh, raw_acc_zHigh;
 volatile uint8_t  raw_acc_xLow,  raw_acc_yLow,  raw_acc_zLow;
@@ -186,9 +192,10 @@ void but_joy_callback(void){
 }
 
 void but_on_off_callback(void){
+
 	// Indica que o botão onoff foi pressionado:
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xSemaphoreGiveFromISR(xSemaphoreOnOff, xHigherPriorityTaskWoken);
+	xSemaphoreGiveFromISR(xSemaphoreOnOff, &xHigherPriorityTaskWoken);
 }
 
 void but1_callback(void)
@@ -928,10 +935,32 @@ void task_potenciometro(void){
 	
 }
 
-void task_uart(void){
-	printf("Task Uart");
+void task_handshake(void){
+	printf("Task Handshake");
+	
+	data dado;
+	int send = 0;
+	
 	while(1){
+		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
+			if(handshake == '1'){
+				handshake= '0';
+				}else{
+				handshake  = '1';
+			}
+			
+			dado.h0 = 'H';
+			dado.h1 = '0';
+			dado.h2 = handshake;
+			
+			connect_led(dado.h2);		
+			send = 1;
+		}
 		
+		if(send){
+			send_package(dado.h0, dado.h1, dado.h2);
+			send = 0;
+		}
 	}
 }
 
@@ -944,20 +973,8 @@ void task_main(void) {
 
 	// Configura  botões
 	io_init();
-	
-	char tipo;
-	char button;
-	char button_ID;
-	char status;
-	joyData datajoy;
+
 	data dado;
-	
-	char handshake = '0';
-	char speed_state;
-	char rotation_state;
-	
-	int send = 0;
-	int firstTime = 1;
 
 	//                PROTOCOLO
 	// ----------------------------------------------
@@ -981,36 +998,17 @@ void task_main(void) {
 		
 		// MAIN
 		if(xQueueReceive(xQueueMain , &dado, 0)){
+						
 			printf("\n%c\n", dado.h0);
 			printf("%c\n", dado.h1);
 			printf("%c\n", dado.h2);
-		}
-								
-		// HANDSHAKE
-		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
 			
 			if(handshake == '1'){
-				handshake = '0';
-				}else{
-				handshake  = '1';
+				send_package(dado.h0, dado.h1, dado.h2);	
 			}
 			
-			connect_led(handshake);
-			send_package('H', '0', handshake);
 		}
 		
-		if(handshake == '0'){
-			send = 0;
-		}
-		
-		// Envio de dados
-		if(send && handshake){
-			// Envia pacote:
-			send_package(tipo, button_ID, status);
-			// Variável de envio
-			send = 0;
-		}
-
 	}
 }
 
@@ -1042,7 +1040,7 @@ int main(void) {
 	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
 	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
 	xTaskCreate(task_imu,"IMU", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
-	xTaskCreate(task_uart,"Uart", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_handshake,"Handshake", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
 	
 	if (xQueueMain == NULL || xQueueAfec == NULL ||  xQueueAfecX == NULL || xQueueAfecY == NULL)
 	printf("falha em criar fila \n");
