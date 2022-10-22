@@ -100,8 +100,9 @@ typedef struct {
 /* VAR globais                                                          */
 /************************************************************************/
 
-char handshake;
+char handshake = 0;
 char handshake_check = 0;
+int sleep_mode = 0;
 
 // ----------------------------------------------------------------------
 
@@ -611,8 +612,8 @@ int8_t mcu6050_i2c_bus_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_dat
 	return (int8_t)ierror;
 }
 
-void connect_led(char handshake){
-	if(handshake == '1'){
+void connect_led(int state){
+	if(state){
 		pio_set(LED_PIO,LED_IDX_MASK);
 		}else{
 		pio_clear(LED_PIO,LED_IDX_MASK);
@@ -945,9 +946,12 @@ void task_handshake(void){
 	while(1){
 		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
 			if(handshake == '1'){
+				// Pedido para desligar
+				handshake_check = 0;
 				handshake= '0';
-				handshake_check = '0';
+				sleep_mode = 1;
 			}else{
+				// Pedido para ligar
 				handshake  = '1';
 			}
 			
@@ -959,16 +963,18 @@ void task_handshake(void){
 		}
 		
 		if(send){
-			printf("Envia pedido de ligar/desligar! \n");
+			//printf("Envia pedido de ligar/desligar! \n");
 			send_package(dado.h0, dado.h1, dado.h2);
 			send = 0;
 		}
 		
-		if(usart_read(USART_COM, &recive)){
-			if(recive == 0x43){
-				printf("Recebi ack! \n");
-				handshake_check = 1;
+		if(usart_read(USART_COM, &recive) == 0){
+			printf("rx = %c", recive);
+			if(recive == 'R'){
+				//printf("\n Recebi ack! \n");
 				connect_led(1);
+				
+				handshake_check = 1;
 			}	
 		}
 		
@@ -1008,18 +1014,22 @@ void task_main(void) {
 	while(1) {
 		
 		// Entra em sleep mode.
-		if(handshake == '0' && handshake_check){
-			printf("Desligando ... \n");
-			handshake_check = 0;
+		if(sleep_mode){
+			//printf("\n Desligando ... \n");	
 			connect_led(0);
 			xQueueReset(xQueueMain);
 			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
+			sleep_mode = 0;
+			
 		}
 		
 		// MAIN
 		if(xQueueReceive(xQueueMain , &dado, 0)){
 						
 			if(handshake_check){
+				//printf("\n %c \n", dado.h0);
+				//printf("\ %c \n", dado.h1);
+				//printf(" %c \n", dado.h2);
 				send_package(dado.h0, dado.h1, dado.h2);	
 			}
 			
