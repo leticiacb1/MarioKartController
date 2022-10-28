@@ -46,16 +46,16 @@
 #define LED_IDX     24
 #define LED_IDX_MASK (1 << LED_IDX)
 
-// LED direção ESQUERDA PD20
-#define LED2_PIO		PIOD
-#define LED2_PIO_ID	ID_PIOD
-#define LED2_IDX     20
+// LED direção ESQUERDA PA20
+#define LED2_PIO		PIOA
+#define LED2_PIO_ID	ID_PIOA
+#define LED2_IDX     0
 #define LED2_IDX_MASK (1 << LED2_IDX)
 
-// LED direção DIREIRA PD22
-#define LED3_PIO		PIOD
-#define LED3_PIO_ID	ID_PIOD
-#define LED3_IDX     22
+// LED direção DIREIRA PC30
+#define LED3_PIO		PIOC
+#define LED3_PIO_ID	ID_PIOC
+#define LED3_IDX     30
 #define LED3_IDX_MASK (1 << LED3_IDX)
 
 // --------------- JOYSTICK ----------------------
