@@ -46,6 +46,18 @@
 #define LED_IDX     24
 #define LED_IDX_MASK (1 << LED_IDX)
 
+// LED direção ESQUERDA PD20
+#define LED2_PIO		PIOD
+#define LED2_PIO_ID	ID_PIOD
+#define LED2_IDX     20
+#define LED2_IDX_MASK (1 << LED2_IDX)
+
+// LED direção DIREIRA PD22
+#define LED3_PIO		PIOD
+#define LED3_PIO_ID	ID_PIOD
+#define LED3_IDX     22
+#define LED3_IDX_MASK (1 << LED3_IDX)
+
 // --------------- JOYSTICK ----------------------
 // x do Joystick PB2
 #define AFECx_POT AFEC0
@@ -290,7 +302,11 @@ static void AFEC_yJoy_Callback (void){
 
 void led_config(void){
 	pmc_enable_periph_clk(LED_PIO_ID);
+	pmc_enable_periph_clk(LED2_PIO_ID);
+	pmc_enable_periph_clk(LED3_PIO_ID);
 	pio_set_output(LED_PIO, LED_IDX_MASK, 0, 0, 0);
+	pio_set_output(LED2_PIO, LED2_IDX_MASK, 0, 0, 0);
+	pio_set_output(LED3_PIO, LED3_IDX_MASK, 0, 0, 0);
 }
 
 void buts_config(void){
@@ -620,6 +636,19 @@ void connect_led(int state){
 	}
 }
 
+void led_direction(char direcao){
+	if(direcao == 'l'){
+		pio_set(LED2_IDX, LED2_IDX_MASK);
+		pio_clear(LED3_IDX, LED3_IDX_MASK);
+	}else if(direcao == 'r'){
+		pio_clear(LED2_IDX, LED2_IDX_MASK);
+		pio_set(LED3_IDX, LED3_IDX_MASK);
+	}else{
+		pio_clear(LED2_IDX, LED2_IDX_MASK);
+		pio_clear(LED3_IDX, LED3_IDX_MASK);
+	}
+}
+
 void send(char arg){
 	while(!usart_is_tx_ready(USART_COM)) {
 		vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -775,6 +804,9 @@ void task_imu(void){
 			if(dado.h1 != 'r'){
 				send = 1;
 				dado.h1 = 'r';
+				led_direction('r');
+			
+				
 			}
 			
 			}else if(euler.angle.roll < -30){
@@ -782,12 +814,14 @@ void task_imu(void){
 			if(dado.h1 != 'l'){
 				send = 1;
 				dado.h1 = 'l';
+				led_direction('l');
 			}
 			
 			}else {
 			if(dado.h1 != 's'){
 				send = 1;
 				dado.h1 = 's';
+				led_direction('s');
 			}
 		}
 		
