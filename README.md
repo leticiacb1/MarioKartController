@@ -6,7 +6,7 @@ Desenvolvendo um controle remoto wii para jogo Mario Kart!
 <img alt="jogo mario" src = "img_README/BelovedSeriousKouprey-size_restricted.gif" width="500"></img>
 </div>
 
-## Entrega 1
+## Entrega 2
 
 `INTEGRANTES`
 
@@ -115,9 +115,9 @@ Quais os feedbacks que seu controle vai fornecer ao usuário?
 </div>
 <br></br>
 
-- Leds para indicação de botoes pressionados
+- Leds para indicação de botões pressionados, acelerando para frente ou para trás
 
-- Vibração em caso de dano 
+- Led para indicar que o controle está ativado/conectado ou não. 
 <br></br>
 
 ## In/OUT (3 pts)
@@ -139,11 +139,11 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 
 - Virar para os lados : <b> IMU </b>
 
-- Drift : <b>Push button vermelho</b>
+- Drift : <b>Push button verde</b>
 
 - Usar itens : <b>Push button azul</b>
 
-- Selecionar e percorrer menus e configuracoes do jogo : <b>Joypad</b>
+- Selecionar e percorrer menus e configuracoes do jogo : <b>Joypad lateral</b>
 
 - Botao liga/desliga : <b>Mini illuminated pushbutton</b>
 <br></br>
@@ -153,11 +153,11 @@ Para cada Comando/ Feedback do seu controle, associe qual sensores/ atuadores pr
 </div>
 <br></br>
 
-- Botao vermelho pressionado : <b>LED vermelho</b>
+- Botao verde pressionado : <b>LED verde</b>
 
 - Botao azul pressionado : <b>LED azul</b>
 
-- Vibração em caso de dano : <b>Vibracall</b>
+- Controle ligado/conectado: <b>LED interno do botão power</b>
 <br></br>
 
 ### Design (2 pts)
