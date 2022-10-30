@@ -52,6 +52,9 @@
  * running the ASF driver selector tool. Any changes will be discarded.
  */
 
+// From module: AFEC - Analog-Front-End Controller
+#include <afec.h>
+
 // From module: Common SAM compiler driver
 #include <compiler.h>
 #include <status_codes.h>
@@ -99,11 +102,18 @@
 // From module: Part identification macros
 #include <parts.h>
 
+// From module: RTT - Real Time Timer
+#include <rtt.h>
+
 // From module: SAM FPU driver
 #include <fpu.h>
 
 // From module: SAME70 XPLD LED support enabled
 #include <led.h>
+
+// From module: Sleep manager - SAM implementation
+#include <sam/sleepmgr.h>
+#include <sleepmgr.h>
 
 // From module: Standard serial I/O (stdio) - SAM implementation
 #include <stdio_serial.h>
@@ -113,6 +123,15 @@
 
 // From module: TC - Timer Counter
 #include <tc.h>
+
+// From module: TWI - Two-wire Interface High Speed
+#include <twihs.h>
+
+// From module: TWIHS - Two-Wire Interface High Speed- SAM implementation
+#include <sam_twihs/twihs_master.h>
+#include <sam_twihs/twihs_slave.h>
+#include <twihs_master.h>
+#include <twihs_slave.h>
 
 // From module: UART - Univ. Async Rec/Trans
 #include <uart.h>

@@ -8,28 +8,97 @@
 #include <asf.h>
 #include "conf_board.h"
 #include <string.h>
+#include <math.h>
+
+#include "mpu6050.h"
+#include "Fusion/Fusion.h"
 
 /************************************************************************/
 /* defines                                                              */
 /************************************************************************/
 
-// LEDs
-#define LED_PIO      PIOC
-#define LED_PIO_ID   ID_PIOC
-#define LED_IDX      8
+// Acelera Ré PD30 AFEC
+#define AFEC_POT AFEC0
+#define AFEC_POT_ID ID_AFEC0
+#define AFEC_POT_CHANNEL 0
+
+// Botão AZUL protoboard PA2
+#define BUT1_PIO      PIOA
+#define BUT1_PIO_ID   ID_PIOA
+#define BUT1_IDX      2
+#define BUT1_IDX_MASK (1 << BUT1_IDX)
+
+// Botão VERDE protoboard PC19
+#define BUT2_PIO      PIOC
+#define BUT2_PIO_ID   ID_PIOC
+#define BUT2_IDX      19
+#define BUT2_IDX_MASK (1 << BUT2_IDX)
+
+// Botão LIGADESLIGA protoboard PD26
+#define BUTONOFF_PIO      PIOD
+#define BUTONOFF_PIO_ID   ID_PIOD
+#define BUTONOFF_IDX      26
+#define BUTONOFF_IDX_MASK (1 << BUTONOFF_IDX)
+
+// LED de Conexão (Liga/Desliga) PA24
+#define LED_PIO		PIOA
+#define LED_PIO_ID	ID_PIOA
+#define LED_IDX     24
 #define LED_IDX_MASK (1 << LED_IDX)
 
-// Botão
-#define BUT_PIO      PIOA
-#define BUT_PIO_ID   ID_PIOA
-#define BUT_IDX      11
-#define BUT_IDX_MASK (1 << BUT_IDX)
+// LED direção ESQUERDA PA20
+#define LED2_PIO		PIOA
+#define LED2_PIO_ID	ID_PIOA
+#define LED2_IDX     0
+#define LED2_IDX_MASK (1 << LED2_IDX)
+
+// LED direção DIREIRA PC30
+#define LED3_PIO		PIOC
+#define LED3_PIO_ID	ID_PIOC
+#define LED3_IDX     30
+#define LED3_IDX_MASK (1 << LED3_IDX)
+
+// --------------- JOYSTICK ----------------------
+// x do Joystick PB2
+#define AFECx_POT AFEC0
+#define AFECx_POT_ID ID_AFEC0
+#define AFECx_POT_CHANNEL 5
+
+// y do joystick PB3
+#define AFECy_POT AFEC0
+#define AFECy_POT_ID ID_AFEC0
+#define AFECy_POT_CHANNEL 2
+
+// BOTAO PC31
+#define BUT_JOY_PIO    PIOC
+#define BUT_JOY_PIO_ID ID_PIOC
+#define BUT_JOY_IDX    31
+#define BUT_JOY_IDX_MASK  (1 << BUT_JOY_IDX)
+
+#define END_OF_PCK	  'X'
+#define WAIT_TIME	  100 / portTICK_PERIOD_MS
+
+#define DIGITAL 'D'
+#define ANALOGICO 'A' 
+#define IMU 'I'
+#define JOYSTICK 'J'
+
+typedef struct {
+	volatile char h0;  // Tipo
+	volatile char h1;  
+	volatile char h2;
+} data;
+
+typedef struct {
+	char eixo_x;
+	char eixo_y;
+} joyData;
 
 // usart (bluetooth ou serial)
 // Descomente para enviar dados
 // pela serial debug
 
-//#define DEBUG_SERIAL
+#define DEBUG_SERIAL
 
 #ifdef DEBUG_SERIAL
 #define USART_COM USART1
@@ -40,11 +109,45 @@
 #endif
 
 /************************************************************************/
+/* VAR globais                                                          */
+/************************************************************************/
+
+char handshake = 0;
+char handshake_check = 0;
+int sleep_mode = 0;
+
+// ----------------------------------------------------------------------
+
+int16_t  raw_acc_x, raw_acc_y, raw_acc_z;
+volatile uint8_t  raw_acc_xHigh, raw_acc_yHigh, raw_acc_zHigh;
+volatile uint8_t  raw_acc_xLow,  raw_acc_yLow,  raw_acc_zLow;
+float proc_acc_x, proc_acc_y, proc_acc_z;
+
+int16_t  raw_gyr_x, raw_gyr_y, raw_gyr_z;
+volatile uint8_t  raw_gyr_xHigh, raw_gyr_yHigh, raw_gyr_zHigh;
+volatile uint8_t  raw_gyr_xLow,  raw_gyr_yLow,  raw_gyr_zLow;
+float proc_gyr_x, proc_gyr_y, proc_gyr_z;
+
+/************************************************************************/
 /* RTOS                                                                 */
 /************************************************************************/
 
-#define TASK_BLUETOOTH_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
-#define TASK_BLUETOOTH_STACK_PRIORITY        (tskIDLE_PRIORITY)
+// Filas
+QueueHandle_t xQueueMain;
+
+QueueHandle_t xQueueAfec;
+QueueHandle_t xQueueAfecX;
+QueueHandle_t xQueueAfecY;
+
+// Semaforos
+SemaphoreHandle_t xSemaphoreOnOff;
+
+#define TASK_MAIN_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_MAIN_STACK_PRIORITY        (tskIDLE_PRIORITY)
+#define TASK_POT_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_POT_STACK_PRIORITY        (tskIDLE_PRIORITY)
+#define TASK_IMU_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_IMU_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
 /************************************************************************/
 /* prototypes                                                           */
@@ -58,44 +161,23 @@ extern void vApplicationMallocFailedHook(void);
 extern void xPortSysTickHandler(void);
 
 /************************************************************************/
-/* constants                                                            */
-/************************************************************************/
-
-/************************************************************************/
-/* variaveis globais                                                    */
-/************************************************************************/
-
-/************************************************************************/
 /* RTOS application HOOK                                                */
 /************************************************************************/
 
-/* Called if stack overflow during execution */
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,
 signed char *pcTaskName) {
 	printf("stack overflow %x %s\r\n", pxTask, (portCHAR *)pcTaskName);
-	/* If the parameters have been corrupted then inspect pxCurrentTCB to
-	* identify which task has overflowed its stack.
-	*/
 	for (;;) {
 	}
 }
 
-/* This function is called by FreeRTOS idle task */
 extern void vApplicationIdleHook(void) {
 	pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
 }
 
-/* This function is called by FreeRTOS each tick */
 extern void vApplicationTickHook(void) { }
 
 extern void vApplicationMallocFailedHook(void) {
-	/* Called if a call to pvPortMalloc() fails because there is insufficient
-	free memory available in the FreeRTOS heap.  pvPortMalloc() is called
-	internally by FreeRTOS API functions that create tasks, queues, software
-	timers, and semaphores.  The size of the FreeRTOS heap is set by the
-	configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
-
-	/* Force an assert. */
 	configASSERT( ( volatile void * ) NULL );
 }
 
@@ -103,19 +185,202 @@ extern void vApplicationMallocFailedHook(void) {
 /* handlers / callbacks                                                 */
 /************************************************************************/
 
+void but_joy_callback(void){
+	
+	data dado;
+	char butId = 'Y';
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	if(!pio_get(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK)){
+		dado.h2 = '1';
+		}else{
+		dado.h2 = '0';
+	}
+	
+	xQueueSendFromISR(xQueueMain, &dado, &xHigherPriorityTaskWoken);
+	
+}
+
+void but_on_off_callback(void){
+
+	// Indica que o botão onoff foi pressionado:
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xSemaphoreGiveFromISR(xSemaphoreOnOff, &xHigherPriorityTaskWoken);
+}
+
+void but1_callback(void)
+{
+	data dado;
+	char butId = 'A';
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	
+	// Borda subida (Apertou):
+	if(!pio_get(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK)){
+		dado.h2 = '1';
+		}else{
+		// Borda de descida (Soltou):
+		dado.h2 = '0';
+	}
+	
+	xQueueSendFromISR(xQueueMain, &dado , &xHigherPriorityTaskWoken);
+}
+
+void but2_callback(void)
+{
+	data dado;
+	char butId = 'B';
+	
+	dado.h0 = DIGITAL;
+	dado.h1 = butId;
+	
+	// Indica que o botão verde foi pressionado:
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	
+	// Borda subida (Apertou):
+	if(!pio_get(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK)){
+		dado.h2 = '1';
+		}else{
+		// Borda de descida (Soltou):
+		dado.h2 = '0';
+	}
+	
+	xQueueSendFromISR(xQueueMain, &dado , &xHigherPriorityTaskWoken);
+}
+
+void TC1_Handler(void) {
+	volatile uint32_t ul_dummy;
+
+	ul_dummy = tc_get_status(TC0, 1);
+
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+
+	/* Selecina canal e inicializa conversão */
+	afec_channel_enable(AFEC_POT, AFEC_POT_CHANNEL);
+	
+	// Adicionei:
+	afec_channel_enable(AFEC_POT, AFECx_POT_CHANNEL);
+	afec_channel_enable(AFEC_POT, AFECy_POT_CHANNEL);
+	
+	afec_start_software_conversion(AFEC_POT);
+}
+
+static void AFEC_pot_Callback(void) {
+	int value = afec_channel_get_value(AFEC_POT, AFEC_POT_CHANNEL);
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfec, &value , &xHigherPriorityTaskWoken);
+	
+	// x - JOYSTICK
+	afec_channel_enable(AFECx_POT, AFECx_POT_CHANNEL);
+	afec_start_software_conversion(AFECx_POT);
+}
+
+static void AFEC_xJoy_Callback(void) {
+	int value = afec_channel_get_value(AFECx_POT, AFECx_POT_CHANNEL);
+	
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfecX, &value , &xHigherPriorityTaskWoken);
+}
+
+static void AFEC_yJoy_Callback (void){
+	int value = afec_channel_get_value(AFECy_POT, AFECy_POT_CHANNEL);
+	
+	BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+	xQueueSendFromISR(xQueueAfecY, &value , &xHigherPriorityTaskWoken);
+}
+
 /************************************************************************/
 /* funcoes                                                              */
 /************************************************************************/
 
-void io_init(void) {
-
-	// Ativa PIOs
+void led_config(void){
 	pmc_enable_periph_clk(LED_PIO_ID);
-	pmc_enable_periph_clk(BUT_PIO_ID);
+	pmc_enable_periph_clk(LED2_PIO_ID);
+	pmc_enable_periph_clk(LED3_PIO_ID);
+	pio_set_output(LED_PIO, LED_IDX_MASK, 0, 0, 0);
+	pio_set_output(LED2_PIO, LED2_IDX_MASK, 0, 0, 0);
+	pio_set_output(LED3_PIO, LED3_IDX_MASK, 0, 0, 0);
+}
 
-	// Configura Pinos
-	pio_configure(LED_PIO, PIO_OUTPUT_0, LED_IDX_MASK, PIO_DEFAULT | PIO_DEBOUNCE);
-	pio_configure(BUT_PIO, PIO_INPUT, BUT_IDX_MASK, PIO_PULLUP);
+void buts_config(void){
+	
+	// Inicializa PIO dos botões
+	pmc_enable_periph_clk(BUTONOFF_PIO_ID);
+	pmc_enable_periph_clk(BUT1_PIO_ID);
+	pmc_enable_periph_clk(BUT2_PIO_ID);
+	
+	// Inicializando botoes como entrada , configurando debounce
+	pio_configure(BUTONOFF_PIO, PIO_INPUT, BUTONOFF_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_configure(BUT1_PIO, PIO_INPUT, BUT1_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_configure(BUT2_PIO, PIO_INPUT, BUT2_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	
+	// Aplicando filtro debounce
+	pio_set_debounce_filter(BUTONOFF_PIO, BUTONOFF_IDX_MASK, 80);
+	pio_set_debounce_filter(BUT1_PIO, BUT1_IDX_MASK, 80);
+	pio_set_debounce_filter(BUT2_PIO, BUT2_IDX_MASK, 80);
+}
+
+
+void but_interrupt_config(Pio *p_pio , uint32_t pio_id, const uint32_t ul_mask , uint32_t priority){
+	
+	// Ativa interrupção e limpa primeira IRQ gerada na ativacao
+	pio_enable_interrupt(p_pio, ul_mask);
+	pio_get_interrupt_status(p_pio);
+	
+	// Configura NVIC para receber interrupcoes do PIO dos botões com mesma prioridade.
+	NVIC_EnableIRQ(pio_id);
+	NVIC_SetPriority(pio_id, priority);
+}
+
+void but_vjoy_config(void){
+	pmc_enable_periph_clk(BUT_JOY_PIO_ID);
+	pio_configure(BUT_JOY_PIO, PIO_INPUT, BUT_JOY_IDX_MASK,  PIO_PULLUP | PIO_DEBOUNCE);
+	pio_set_debounce_filter(BUT_JOY_PIO, BUT_JOY_IDX_MASK, 80);
+	
+	pio_handler_set(BUT_JOY_PIO,
+	BUT_JOY_PIO_ID,
+	BUT_JOY_IDX_MASK,
+	PIO_IT_EDGE,
+	but_joy_callback);
+	but_interrupt_config(BUT_JOY_PIO, BUT_JOY_PIO_ID, BUT_JOY_IDX_MASK, 4);
+}
+
+void io_init(void) {
+	
+	led_config();
+	buts_config();
+	
+	pio_handler_set(BUTONOFF_PIO,
+	BUTONOFF_PIO_ID,
+	BUTONOFF_IDX_MASK,
+	PIO_IT_RISE_EDGE,
+	but_on_off_callback);
+	
+	pio_handler_set(BUT1_PIO,
+	BUT1_PIO_ID,
+	BUT1_IDX_MASK,
+	PIO_IT_EDGE,
+	but1_callback);
+	
+	pio_handler_set(BUT2_PIO,
+	BUT2_PIO_ID,
+	BUT2_IDX_MASK,
+	PIO_IT_EDGE,
+	but2_callback);
+	
+	
+	// Ativa interrupção nos botões:
+	but_interrupt_config(BUTONOFF_PIO, BUTONOFF_PIO_ID, BUTONOFF_IDX_MASK, 4);
+	but_interrupt_config(BUT1_PIO, BUT1_PIO_ID, BUT1_IDX_MASK, 4);
+	but_interrupt_config(BUT2_PIO, BUT2_PIO_ID, BUT2_IDX_MASK, 4);
+	
 }
 
 static void configure_console(void) {
@@ -205,49 +470,605 @@ int hc05_init(void) {
 	vTaskDelay( 500 / portTICK_PERIOD_MS);
 	usart_send_command(USART_COM, buffer_rx, 1000, "AT", 100);
 	vTaskDelay( 500 / portTICK_PERIOD_MS);
-	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000", 100);
+	usart_send_command(USART_COM, buffer_rx, 1000, "AT+PIN0000\n", 100);
+}
+
+static void config_AFEC_pot() {
+	/*************************************
+	* Ativa e configura AFEC
+	*************************************/
+	/* Ativa AFEC - 0 */
+	afec_enable(AFEC_POT);
+
+	/* struct de configuracao do AFEC */
+	struct afec_config afec_cfg;
+
+	/* Carrega parametros padrao */
+	afec_get_config_defaults(&afec_cfg);
+
+	/* Configura AFEC */
+	afec_init(AFEC_POT, &afec_cfg);
+
+	/* Configura trigger por software */
+	afec_set_trigger(AFEC_POT, AFEC_TRIG_SW);
+
+	/*** Configuracao específica do canal AFEC ***/
+	struct afec_ch_config afec_ch_cfg;
+	afec_ch_get_config_defaults(&afec_ch_cfg);
+	afec_ch_cfg.gain = AFEC_GAINVALUE_0;
+	afec_ch_set_config(AFEC_POT, AFEC_POT_CHANNEL, &afec_ch_cfg);
+	afec_ch_set_config(AFECx_POT, AFECx_POT_CHANNEL, &afec_ch_cfg);
+	afec_ch_set_config(AFECy_POT, AFECy_POT_CHANNEL, &afec_ch_cfg);
+	
+	/*
+	* Calibracao:
+	* Because the internal ADC offset is 0x200, it should cancel it and shift
+	down to 0.
+	*/
+	afec_channel_set_analog_offset(AFEC_POT, AFEC_POT_CHANNEL, 0x200);
+	afec_channel_set_analog_offset(AFECx_POT, AFECx_POT_CHANNEL, 0x200);
+	afec_channel_set_analog_offset(AFECy_POT, AFECy_POT_CHANNEL, 0x200);
+
+	/* configura IRQ */
+	afec_set_callback(AFEC_POT, AFEC_POT_CHANNEL, AFEC_pot_Callback, 1);
+	afec_set_callback(AFECx_POT, AFECx_POT_CHANNEL, AFEC_xJoy_Callback, 1);
+	afec_set_callback(AFECy_POT, AFECy_POT_CHANNEL, AFEC_yJoy_Callback, 1);
+
+	NVIC_SetPriority(ID_AFEC0, 4);
+	NVIC_EnableIRQ(ID_AFEC0);
+}
+
+void TC_init(Tc *TC, int ID_TC, int TC_CHANNEL, int freq) {
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+	pmc_enable_periph_clk(ID_TC);
+
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	NVIC_SetPriority((IRQn_Type)ID_TC, 4);
+	NVIC_EnableIRQ((IRQn_Type)ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+}
+
+static void RTT_init(float freqPrescale, uint32_t IrqNPulses, uint32_t rttIRQSource) {
+
+	uint16_t pllPreScale = (int) (((float) 32768) / freqPrescale);
+	
+	rtt_sel_source(RTT, false);
+	rtt_init(RTT, pllPreScale);
+	
+	if (rttIRQSource & RTT_MR_ALMIEN) {
+		uint32_t ul_previous_time;
+		ul_previous_time = rtt_read_timer_value(RTT);
+		while (ul_previous_time == rtt_read_timer_value(RTT));
+		rtt_write_alarm_time(RTT, IrqNPulses+ul_previous_time);
+	}
+
+	/* config NVIC */
+	NVIC_DisableIRQ(RTT_IRQn);
+	NVIC_ClearPendingIRQ(RTT_IRQn);
+	NVIC_SetPriority(RTT_IRQn, 4);
+	NVIC_EnableIRQ(RTT_IRQn);
+
+	/* Enable RTT interrupt */
+	if (rttIRQSource & (RTT_MR_RTTINCIEN | RTT_MR_ALMIEN))
+	rtt_enable_interrupt(RTT, rttIRQSource);
+	else
+	rtt_disable_interrupt(RTT, RTT_MR_RTTINCIEN | RTT_MR_ALMIEN);
+	
+}
+
+
+/*	
+ *  \Brief: The function is used as I2C bus init
+ */
+void mcu6050_i2c_bus_init(void)
+{
+	twihs_options_t bno055_option;
+	pmc_enable_periph_clk(TWIHS_MCU6050_ID);
+
+	/* Configure the options of TWI driver */
+	bno055_option.master_clk = sysclk_get_cpu_hz();
+	bno055_option.speed      = 40000;
+	twihs_master_init(TWIHS_MCU6050, &bno055_option);
+}
+
+/*	\Brief: The function is used as I2C bus write
+ *	\Return : Status of the I2C write
+ *	\param dev_addr : The device address of the sensor
+ *	\param reg_addr : Address of the first register, will data is going to be written
+ *	\param reg_data : It is a value hold in the array,
+ *		will be used for write the value into the register
+ *	\param cnt : The no of byte of data to be write
+ */
+int8_t mcu6050_i2c_bus_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+{
+	int32_t ierror = 0x00;
+
+	twihs_packet_t p_packet;
+	p_packet.chip         = dev_addr;
+	p_packet.addr[0]      = reg_addr;
+	p_packet.addr_length  = 1;
+	p_packet.buffer       = reg_data;
+	p_packet.length       = cnt;
+	
+	ierror = twihs_master_write(TWIHS_MCU6050, &p_packet);
+
+	return (int8_t)ierror;
+}
+
+
+ /*	\Brief: The function is used as I2C bus read
+ *	\Return : Status of the I2C read
+ *	\param dev_addr : The device address of the sensor
+ *	\param reg_addr : Address of the first register, will data is going to be read
+ *	\param reg_data : This data read from the sensor, which is hold in an array
+ *	\param cnt : The no of byte of data to be read
+ */
+int8_t mcu6050_i2c_bus_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *reg_data, uint8_t cnt)
+{
+	int32_t ierror = 0x00;
+	
+	twihs_packet_t p_packet;
+	p_packet.chip         = dev_addr;
+	p_packet.addr[0]      = reg_addr;
+	p_packet.addr_length  = 1;
+	p_packet.buffer       = reg_data;
+	p_packet.length       = cnt;
+	
+  // TODO: Algum problema no SPI faz com que devemos ler duas vezes o registrador para
+  //       conseguirmos pegar o valor correto.
+	ierror = twihs_master_read(TWIHS_MCU6050, &p_packet);
+	ierror = twihs_master_read(TWIHS_MCU6050, &p_packet);
+
+	return (int8_t)ierror;
+}
+
+void connect_led(int state){
+	if(state){
+		pio_set(LED_PIO,LED_IDX_MASK);
+		}else{
+		pio_clear(LED_PIO,LED_IDX_MASK);
+	}
+}
+
+void led_direction(char direcao){
+	if(direcao == 'l'){
+		pio_set(LED2_IDX, LED2_IDX_MASK);
+		pio_clear(LED3_IDX, LED3_IDX_MASK);
+	}else if(direcao == 'r'){
+		pio_clear(LED2_IDX, LED2_IDX_MASK);
+		pio_set(LED3_IDX, LED3_IDX_MASK);
+	}else{
+		pio_clear(LED2_IDX, LED2_IDX_MASK);
+		pio_clear(LED3_IDX, LED3_IDX_MASK);
+	}
+}
+
+void send(char arg){
+	while(!usart_is_tx_ready(USART_COM)) {
+		vTaskDelay(10 / portTICK_PERIOD_MS);
+	}
+	usart_write(USART_COM, arg);
+}
+
+void send_package(char tipo, char id , char status ){
+	
+	// Envia tipo:
+	send(tipo);
+	
+	// Envia id do botão:
+	send(id);
+	
+	// Envia status do botão:
+	send(status);
+	
+	// envia fim de pacote
+	send(END_OF_PCK);
 }
 
 /************************************************************************/
 /* TASKS                                                                */
 /************************************************************************/
-
-void task_bluetooth(void) {
-	printf("Task Bluetooth started \n");
+void task_imu(void){
+	printf("Task IMU started \n");
 	
+	
+	/* buffer para recebimento de dados */
+	uint8_t bufferRX[100];
+	uint8_t bufferTX[100];
+	
+	uint8_t rtn;
+	
+	/* Inicializa funcao de delay */
+	delay_init( sysclk_get_cpu_hz());
+
+	/* Inicializa Função de fusão */
+	FusionAhrs ahrs;
+	FusionAhrsInitialise(&ahrs);
+	
+	/************************************************************************/
+	/* MPU                                                                  */
+	/************************************************************************/
+	
+	/* Inicializa i2c */
+	printf("Inicializando bus i2c \n");
+	mcu6050_i2c_bus_init();
+	
+	// Verifica MPU
+	
+	rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_WHO_AM_I, bufferRX, 1);
+	
+	
+	if(rtn != TWIHS_SUCCESS){
+		printf("[ERRO] [i2c] [read] \n");
+	}
+	
+	// Por algum motivo a primeira leitura é errada.
+	if(bufferRX[0] != 0x68){
+		printf("[ERRO] [mcu] [Wrong device] [0x%2X] \n", bufferRX[0]);
+	}
+	
+	// Set Clock source
+	bufferTX[0] = MPU6050_CLOCK_PLL_XGYRO;
+	rtn = mcu6050_i2c_bus_write(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_PWR_MGMT_1, bufferTX, 1);
+	if(rtn != TWIHS_SUCCESS)
+	printf("[ERRO] [i2c] [write] \n");
+
+	RTT_init(1000, 0, 0);
+	int tick_old = 0;
+	
+	data dado;
+	dado.h0 = 'I';
+	dado.h1 = '0';
+	dado.h2 = '0';
+	
+	// Variável de estado , envio de dados apenas se houver mudança de estado:
+	uint32_t send = 0;
+	char state;
+	// 's' -> stop
+	// 'r' -> right
+	// 'l' -> left
+	
+	while (1) {
+		// Configura range acelerometro para operar com 2G
+		bufferTX[0] = 0x00; // 2G
+		rtn = mcu6050_i2c_bus_write(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_CONFIG, bufferTX, 1);
+		
+		// Le valor do acc X High e Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_XOUT_H, &raw_acc_xHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_XOUT_L, &raw_acc_xLow,  1);
+		
+		// Le valor do acc y High e  Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_YOUT_H, &raw_acc_yHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_ZOUT_L, &raw_acc_yLow,  1);
+		
+		// Le valor do acc z HIGH e Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_ZOUT_H, &raw_acc_zHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_ACCEL_ZOUT_L, &raw_acc_zLow,  1);
+		
+		// Dados são do tipo complemento de dois
+		raw_acc_x = (raw_acc_xHigh << 8) | (raw_acc_xLow << 0);
+		raw_acc_y = (raw_acc_yHigh << 8) | (raw_acc_yLow << 0);
+		raw_acc_z = (raw_acc_zHigh << 8) | (raw_acc_zLow << 0);
+		proc_acc_x = (float)raw_acc_x/16384;
+		proc_acc_y = (float)raw_acc_y/16384;
+		proc_acc_z = (float)raw_acc_z/16384;
+		
+		// Configura range gyroscopio para operar com 250 °/s
+		bufferTX[0] = 0x00; // 250 °/s
+		rtn = mcu6050_i2c_bus_write(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_CONFIG, bufferTX, 1);
+		
+		// Le valor do gyr X High e Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_XOUT_H, &raw_gyr_xHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_XOUT_L, &raw_gyr_xLow,  1);
+		
+		// Le valor do gyr y High e  Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_YOUT_H, &raw_gyr_yHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_ZOUT_L, &raw_gyr_yLow,  1);
+		
+		// Le valor do gyr z HIGH e Low
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_ZOUT_H, &raw_gyr_zHigh, 1);
+		rtn = mcu6050_i2c_bus_read(MPU6050_DEFAULT_ADDRESS, MPU6050_RA_GYRO_ZOUT_L, &raw_gyr_zLow,  1);
+		
+		// Dados são do tipo complemento de dois
+		raw_gyr_x = (raw_gyr_xHigh << 8) | (raw_gyr_xLow << 0);
+		raw_gyr_y = (raw_gyr_yHigh << 8) | (raw_gyr_yLow << 0);
+		raw_gyr_z = (raw_gyr_zHigh << 8) | (raw_gyr_zLow << 0);
+		proc_gyr_x = (float)raw_gyr_x/131;
+		proc_gyr_y = (float)raw_gyr_y/131;
+		proc_gyr_z = (float)raw_gyr_z/131;
+		
+		// replace this with actual gyroscope data in degrees/s
+		const FusionVector gyroscope = {proc_gyr_x, proc_gyr_y, proc_gyr_z};
+		// replace this with actual accelerometer data in g
+		const FusionVector accelerometer = {proc_acc_x, proc_acc_y, proc_acc_z};
+		
+		// calcula runtime do código acima para definir delta t do programa
+		int tick = rtt_read_timer_value(RTT);
+		float delta_time = (tick - tick_old)/1000.0;
+		tick_old = tick;
+
+		// aplica o algoritmo
+		FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, delta_time);
+
+		// dados em pitch roll e yaw
+		const FusionEuler euler = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
+				
+		if( euler.angle.roll > 30){
+			
+			if(dado.h1 != 'r'){
+				send = 1;
+				dado.h1 = 'r';
+				led_direction('r');
+			
+				
+			}
+			
+			}else if(euler.angle.roll < -30){
+			
+			if(dado.h1 != 'l'){
+				send = 1;
+				dado.h1 = 'l';
+				led_direction('l');
+			}
+			
+			}else {
+			if(dado.h1 != 's'){
+				send = 1;
+				dado.h1 = 's';
+				led_direction('s');
+			}
+		}
+		
+
+		if(send){
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
+			send = 0;
+		}
+		
+	}
+	
+}
+
+void task_joystick(void){
+
+	printf("\nTask joystick\n");
+	
+	but_vjoy_config();
+	
+	// Variaveis
+	uint32_t send;
+	uint32_t value;
+	
+	// Inicializa dados
+	joyData dataJ;
+	
+	data dado;
+	dado.h0 = 'J';
+	dado.h1 = '0';
+	dado.h2 = '0';
+		
+	// 'd' -> seta para direita
+	// 'e' -> seta para esquerda
+	// 'c' -> seta para cima
+	// 'b' -> seta para baixo
+	// '0' -> Não mexeu
+	
+	while(1){
+		if(xQueueReceive(xQueueAfecX , &(value) , 0)){
+			
+			if(log10(value) < 2.5){
+				if(dado.h1 != 'e'){
+					dado.h1 = 'e';
+					send = 1;
+				}
+				
+				}else if (log10(value) > 3.5){
+				if(dado.h1 != 'd'){
+					dado.h1 = 'd';
+					send = 1;
+				}
+				}else{
+				if(dado.h1 != '0'){
+					dado.h1 = '0';
+					send = 1;
+				}
+			}
+		}
+		
+		
+		if(xQueueReceive(xQueueAfecY , &(value) , 0)){
+			if(log10(value) < 2.5){
+				
+				if(dado.h2 != 'c'){
+					dado.h2 = 'c';
+					send = 1;
+				}
+				
+				}else if (log10(value) > 3.5){
+				if(dado.h2  != 'b'){
+					dado.h2= 'b';
+					send = 1;
+				}
+				}else{
+				if(dado.h2  != '0'){
+					dado.h2 = '0';
+					send = 1;
+				}
+			}
+		}
+		
+		
+		if(send){
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
+			send = 0;
+		}
+		
+	}
+}
+
+void task_potenciometro(void){
+	printf("Task potenciometro started \n");
+	
+	// configura ADC e TC para controlar a leitura
+	config_AFEC_pot();
+	
+	TC_init(TC0, ID_TC1, 1, 10);
+	tc_start(TC0, 1);
+	
+	int value;
+	data dado;
+	dado.h0 = 'A';
+	dado.h2 = '0';
+	
+	// Variável de estado , envio de dados apenas se houver mudança de estado:
+	uint32_t send = 0;
+	char state;
+	// 's' -> stop
+	// 'd' -> decelerate
+	// 'a' -> accelerate
+	
+	while(1){
+		if (xQueueReceive(xQueueAfec, &(value), 80)) {
+			
+			if( log10(value) > 3.5){
+				if(dado.h1 != 'a'){
+					send = 1;
+					dado.h1 = 'a';
+				}
+				
+				}else if( log10(value) < 2.5){
+				
+				if(dado.h1 != 'd'){
+					send = 1;
+					dado.h1 = 'd';
+				}
+				
+				}else {
+				if(dado.h1 != 's'){
+					send = 1;
+					dado.h1 = 's';
+				}
+			}
+			
+		}
+		
+		if(send){
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xQueueSend(xQueueMain, &dado,  &xHigherPriorityTaskWoken);
+			send = 0;
+		}
+		
+	}
+	
+}
+
+void task_handshake(void){
+	printf("Task Handshake");
+	
+	data dado;
+	int send = 0;
+	char recive;
+	
+	while(1){
+		if(xSemaphoreTake(xSemaphoreOnOff, 0)){
+			if(handshake == '1'){
+				// Pedido para desligar
+				handshake_check = 0;
+				handshake= '0';
+				sleep_mode = 1;
+			}else{
+				// Pedido para ligar
+				handshake  = '1';
+			}
+			
+			dado.h0 = 'H';
+			dado.h1 = '0';
+			dado.h2 = handshake;
+		
+			send = 1;
+		}
+		
+		if(send){
+			//printf("Envia pedido de ligar/desligar! \n");
+			send_package(dado.h0, dado.h1, dado.h2);
+			send = 0;
+		}
+		
+		if(usart_read(USART_COM, &recive) == 0){
+			printf("rx = %c", recive);
+			if(recive == 'R'){
+				//printf("\n Recebi ack! \n");
+				connect_led(1);
+				
+				handshake_check = 1;
+			}	
+		}
+		
+	}
+}
+
+void task_main(void) {
+	
+	printf("Task main started \n");
 	printf("Inicializando HC05 \n");
 	config_usart0();
 	hc05_init();
 
-	// configura LEDs e Botões
+	// Configura  botões
 	io_init();
 
-	char button1 = '0';
-	char eof = 'X';
+	data dado;
 
-	// Task não deve retornar.
+	//                PROTOCOLO
+	// ----------------------------------------------
+	// tipo de dado -> A (analogico) D (Digital)
+	// id_botão     -> botão azul 'A'   botão verde 'B'
+	// status botão -> '1' pressionado  '0' soltou
+	
+	//                HANDSHAKE
+	// ---------------------------------------------
+	// tipo = 'H'
+	// id_botao = '0'
+	// status = '0' (antes ligado) '1' (antes desigado)
+	
+	//                VJOY DATA
+	// ---------------------------------------------
+	// tipo = 'J'
+	// id_botao = info eixo x
+	// status = info eixo y
+	
 	while(1) {
-		// atualiza valor do botão
-		if(pio_get(BUT_PIO, PIO_INPUT, BUT_IDX_MASK) == 0) {
-			button1 = '1';
-		} else {
-			button1 = '0';
-		}
-
-		// envia status botão
-		while(!usart_is_tx_ready(USART_COM)) {
-			vTaskDelay(10 / portTICK_PERIOD_MS);
-		}
-		usart_write(USART_COM, button1);
 		
-		// envia fim de pacote
-		while(!usart_is_tx_ready(USART_COM)) {
-			vTaskDelay(10 / portTICK_PERIOD_MS);
+		// Entra em sleep mode.
+		if(sleep_mode){
+			//printf("\n Desligando ... \n");	
+			connect_led(0);
+			xQueueReset(xQueueMain);
+			pmc_sleep(SAM_PM_SMODE_SLEEP_WFI);
+			sleep_mode = 0;
+			
 		}
-		usart_write(USART_COM, eof);
-
-		// dorme por 500 ms
-		vTaskDelay(500 / portTICK_PERIOD_MS);
+		
+		// MAIN
+		if(xQueueReceive(xQueueMain , &dado, 0)){
+						
+			if(handshake_check){
+				//printf("\n %c \n", dado.h0);
+				//printf("\ %c \n", dado.h1);
+				//printf(" %c \n", dado.h2);
+				send_package(dado.h0, dado.h1, dado.h2);	
+			}
+			
+		}
+		
 	}
 }
 
@@ -256,16 +1077,35 @@ void task_bluetooth(void) {
 /************************************************************************/
 
 int main(void) {
-	/* Initialize the SAM system */
+	
+	// Inicializa sistema
 	sysclk_init();
 	board_init();
-
 	configure_console();
 
-	/* Create task to make led blink */
-	xTaskCreate(task_bluetooth, "BLT", TASK_BLUETOOTH_STACK_SIZE, NULL,	TASK_BLUETOOTH_STACK_PRIORITY, NULL);
+	// Cria semáforos para verificar quao botão foi apertado:
+	xSemaphoreOnOff = xSemaphoreCreateBinary();
+	
+	if (xSemaphoreOnOff == NULL)
+	printf("falha em criar semáforo \n");
+	
+	// Cria fila
+	xQueueAfec = xQueueCreate(100, sizeof(uint32_t));
+	xQueueAfecX = xQueueCreate(100, sizeof(uint32_t));
+	xQueueAfecY = xQueueCreate(100, sizeof(uint32_t));
+	xQueueMain = xQueueCreate(100, sizeof(data));
+	
+	// Cria task
+	xTaskCreate(task_main, "Main", TASK_MAIN_STACK_SIZE, NULL,	TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_potenciometro, "Potenciometro", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_joystick , "Joystick" , TASK_MAIN_STACK_SIZE, NULL,  TASK_MAIN_STACK_PRIORITY , NULL);
+	xTaskCreate(task_imu,"IMU", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	xTaskCreate(task_handshake,"Handshake", TASK_MAIN_STACK_SIZE, NULL, TASK_MAIN_STACK_PRIORITY, NULL);
+	
+	if (xQueueMain == NULL || xQueueAfec == NULL ||  xQueueAfecX == NULL || xQueueAfecY == NULL)
+	printf("falha em criar fila \n");
 
-	/* Start the scheduler. */
+	// Start the scheduler.
 	vTaskStartScheduler();
 
 	while(1){}
