@@ -1,6 +1,6 @@
 ##  🎮️  Mario Kart Controller
 
-Um controle que utiliza o microcontrolador SAME70 que, em conjunto com um código em python, realiza a comunicação com o jogo emulado no computador, Mario Kart double dash.
+Um controle que utiliza o microcontrolador SAME70 que, em conjunto com um código em python, realiza a comunicação com o jogo emulado no computador, Mario Kart double dash, por meio de bluetooth.
 
 Para o melhor uso recomenda-se utilizar: 
 
@@ -37,4 +37,16 @@ Para o melhor uso recomenda-se utilizar:
 <br></br>
 
 ### ⚙️ Funcionamento
+
+Para começar o uso do projeto é necessário carregar o código contido no arquivo `firmware/src/main.c` no microcontrolador SAME70.
+Com o código carregado no microcontrolador, precisamos ativar o código python responsável pela leitura dos sinais do controle.
+
+Para rodar o código python, siga as seguintes instrições:
+
+1 - Abra um terminal dentro da pasta `python`
+
+2 - Identifique em que porta COM do computador o microcontrolador esta conectado. Em caso de dúvida, [clique aqui](https://answers.microsoft.com/pt-br/windows/forum/all/cad%C3%AA-as-portas-com-e-lpt-do-windows-10/aeea1cf3-ac8b-4fa0-9614-80175eeeeb28).
+
+3 - Rode o código python no terminal da seguinte forma:
+
 
