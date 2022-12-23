@@ -1,4 +1,4 @@
-##  Mario Kart Controller
+##  🎮️  Mario Kart Controller
 
 Um controle que utiliza o microcontrolador SAME70 que, em conjunto com um código em python, realiza a comunicação com o jogo emulado no computador, Mario Kart double dash.
 
@@ -35,3 +35,6 @@ Para o melhor uso recomenda-se utilizar:
 
 - Controle ligado/conectado: <b>LED interno do botão power</b>
 <br></br>
+
+### ⚙️ Funcionamento
+
