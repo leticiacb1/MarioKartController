@@ -57,7 +57,8 @@ Para rodar o código python, siga as seguintes instrições:
 Teste os analógicos e botões do controle e veja se alguma informação aparece no terminal. Caso sim, o controle está pronto para jogar.
 Inicie o jogo no emulador e divirta-se!
 
-Para ver o controle em ação acesse a playlist : [clique aqui](https://alinsperedu-my.sharepoint.com/personal/lorrancml_al_insper_edu_br/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Florrancml%5Fal%5Finsper%5Fedu%5Fbr%2FDocuments%2Fmario%20kart&ga=1)
+* Para assistir um vídeo explicando melhor o funcionamento do controle, acesse [aqui](https://youtu.be/8cpxPK3ZOVA).
 
+* Para assistir um vídeo com o teste do controle com o usuário, acesse [aqui](https://youtu.be/zMBz2RQcW1E)
 
 @2022, Insper. Quinto Semestre, Engenharia da Computação.
